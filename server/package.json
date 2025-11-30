@@ -20,6 +20,7 @@
     "@types/cors": "^2.8.19",
     "circomlibjs": "^0.1.7",
     "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "libsodium-wrappers": "^0.7.15",
     "snarkjs": "^0.7.5",

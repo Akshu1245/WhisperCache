@@ -32,6 +32,7 @@ import {
   TransactionResult,
   BlockchainStatus
 } from '../blockchain';
+import { uploadToIpfs, checkIpfsStatus, IpfsUploadResult } from '../lib/ipfs';
 
 const router = Router();
 
@@ -39,7 +40,6 @@ const router = Router();
 // Anchor Mode Configuration
 // ============================================================================
 const ANCHOR_MODE = process.env.ANCHOR_MODE || 'sqlite';
-const IPFS_API_URL = process.env.IPFS_API_URL || 'http://localhost:5001';
 const IPFS_GATEWAY_URL = process.env.IPFS_GATEWAY_URL || 'https://ipfs.io/ipfs';
 
 console.log(`[Anchor] Mode: ${ANCHOR_MODE.toUpperCase()}`);
@@ -51,43 +51,22 @@ let blockchainsInitialized = false;
 let simulatedBlockHeight = Math.floor(Date.now() / 1000) % 1000000;
 
 /**
- * Generate simulated IPFS CID (deterministic hash-based)
- * In production, this would call IPFS node
- */
-function generateSimulatedIpfsCid(content: string): string {
-  // Create a CIDv1 style hash (starts with 'baf')
-  const hash = crypto.createHash('sha256').update(content).digest('hex');
-  return `bafybeig${hash.substring(0, 44)}`;
-}
-
-/**
- * Try to pin content to IPFS (if available)
+ * Try to pin content to IPFS using the IPFS service
  * Returns CID on success, null on failure
  */
-async function tryIpfsPin(content: object): Promise<string | null> {
+async function tryIpfsPin(content: object): Promise<IpfsUploadResult | null> {
   if (ANCHOR_MODE !== 'ipfs') {
     return null;
   }
   
-  try {
-    // Try real IPFS first
-    const response = await fetch(`${IPFS_API_URL}/api/v0/add`, {
-      method: 'POST',
-      body: JSON.stringify(content),
-      headers: { 'Content-Type': 'application/json' }
-    });
-    
-    if (response.ok) {
-      const data = await response.json();
-      console.log(`[Anchor] IPFS pinned: ${data.Hash}`);
-      return data.Hash;
-    }
-  } catch (error) {
-    console.log('[Anchor] IPFS not available, using simulated CID');
+  const result = await uploadToIpfs(JSON.stringify(content), 'proof.json');
+  
+  if (result.success) {
+    console.log(`[Anchor] IPFS ${result.simulated ? 'simulated' : 'pinned'}: ${result.cid}`);
+    return result;
   }
   
-  // Fallback to simulated CID
-  return generateSimulatedIpfsCid(JSON.stringify(content));
+  return null;
 }
 
 /**
@@ -191,6 +170,7 @@ router.post('/', simpleAuthMiddleware(), async (req: Request<{}, {}, AnchorReque
     
     // Try IPFS if in IPFS mode
     let ipfsCid: string | null = null;
+    let ipfsGatewayUrl: string | undefined = undefined;
     if (ANCHOR_MODE === 'ipfs') {
       const anchorContent = {
         type: 'whispercache_anchor',
@@ -201,7 +181,11 @@ router.post('/', simpleAuthMiddleware(), async (req: Request<{}, {}, AnchorReque
         timestamp: now,
         metadata
       };
-      ipfsCid = await tryIpfsPin(anchorContent);
+      const ipfsResult = await tryIpfsPin(anchorContent);
+      if (ipfsResult && ipfsResult.cid) {
+        ipfsCid = ipfsResult.cid;
+        ipfsGatewayUrl = ipfsResult.gatewayUrl;
+      }
     }
     
     // Create anchor log entry
@@ -233,7 +217,7 @@ router.post('/', simpleAuthMiddleware(), async (req: Request<{}, {}, AnchorReque
         ipfsCid: ipfsCid || undefined,
         commitment,
         timestamp: now,
-        gatewayUrl: ipfsCid ? `${IPFS_GATEWAY_URL}/${ipfsCid}` : undefined
+        gatewayUrl: ipfsGatewayUrl || (ipfsCid ? `${IPFS_GATEWAY_URL}/${ipfsCid}` : undefined)
       },
       commitment,
       timestamp: now

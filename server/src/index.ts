@@ -1,3 +1,4 @@
+import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
 import zkRouter from './routes/zk'
@@ -13,6 +14,7 @@ import metricsRouter from './routes/metrics'
 import orgRouter from './routes/org'
 import policiesRouter from './routes/policies'
 import gdprRouter from './routes/gdpr'
+import healthRouter, { setReady } from './routes/health'
 import { initCrypto } from './lib/crypto'
 import { initDatabase, saveDatabase, closeDatabase, getDatabaseStats } from './lib/database'
 import { initializeMidnight } from './lib/midnight'
@@ -96,6 +98,7 @@ initializeServices().then((success) => {
   }
   
   startServer()
+  setReady(true) // Mark service as ready for K8s readiness probes
 }).catch(err => {
   logger.error('Fatal error during startup:', err)
   process.exit(1)
@@ -128,6 +131,7 @@ function startServer() {
   app.use('/api/org', orgRouter)           // Organization management
   app.use('/api/policies', policiesRouter) // Policy management
   app.use('/api/gdpr', gdprRouter)         // GDPR compliance endpoints
+  app.use('/health', healthRouter)         // Production health checks (K8s probes)
   
   // Prometheus metrics endpoint at root level for scraping
   app.get('/metrics', (_req, res) => {
