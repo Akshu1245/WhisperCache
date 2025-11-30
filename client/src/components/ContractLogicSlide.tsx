@@ -287,19 +287,66 @@ export default function ContractLogicSlide() {
           className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4"
         >
           {[
-            { icon: "🔒", label: "Shielded State", desc: "Private data in contract" },
-            { icon: "✅", label: "ZK Verification", desc: "On-chain proof checking" },
-            { icon: "📝", label: "Audit Events", desc: "Transparent operations" },
-            { icon: "⛓️", label: "L1 Anchoring", desc: "Cardano finality" }
+            { icon: "🔒", label: "Shielded State", desc: "Private data in contract", gradient: "from-purple-500/20 to-indigo-500/20", glow: "purple" },
+            { icon: "✅", label: "ZK Verification", desc: "On-chain proof checking", gradient: "from-teal-500/20 to-cyan-500/20", glow: "teal" },
+            { icon: "📝", label: "Audit Events", desc: "Transparent operations", gradient: "from-amber-500/20 to-orange-500/20", glow: "amber" },
+            { icon: "⛓️", label: "L1 Anchoring", desc: "Cardano finality", gradient: "from-blue-500/20 to-sky-500/20", glow: "blue" }
           ].map((feature, idx) => (
-            <div
+            <motion.div
               key={idx}
-              className="p-4 rounded-xl bg-zinc-900/30 border border-zinc-800 text-center"
+              className="group relative p-5 rounded-2xl bg-zinc-900/50 border border-zinc-800 text-center cursor-pointer overflow-hidden"
+              style={{ 
+                perspective: "1000px",
+                transformStyle: "preserve-3d"
+              }}
+              whileHover={{ 
+                scale: 1.05,
+                rotateX: -5,
+                rotateY: 5,
+                z: 50,
+                transition: { duration: 0.3 }
+              }}
+              whileTap={{ scale: 0.98 }}
+              initial={{ opacity: 0, y: 30, rotateX: 15 }}
+              whileInView={{ opacity: 1, y: 0, rotateX: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.4 + idx * 0.1, duration: 0.5 }}
             >
-              <div className="text-2xl mb-2">{feature.icon}</div>
-              <div className="text-sm font-medium text-white">{feature.label}</div>
-              <div className="text-xs text-zinc-500">{feature.desc}</div>
-            </div>
+              {/* Gradient background on hover */}
+              <div className={`absolute inset-0 bg-gradient-to-br ${feature.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl`} />
+              
+              {/* Glow effect */}
+              <div className={`absolute -inset-1 bg-${feature.glow}-500/20 rounded-2xl blur-xl opacity-0 group-hover:opacity-60 transition-opacity duration-300`} />
+              
+              {/* Shine effect */}
+              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
+              </div>
+              
+              {/* Border glow */}
+              <div className="absolute inset-0 rounded-2xl border border-white/0 group-hover:border-white/20 transition-colors duration-300" />
+              
+              {/* Content */}
+              <div className="relative z-10">
+                <motion.div 
+                  className="text-3xl mb-3 inline-block"
+                  whileHover={{ 
+                    scale: 1.2, 
+                    rotate: [0, -10, 10, 0],
+                    transition: { duration: 0.4 }
+                  }}
+                >
+                  {feature.icon}
+                </motion.div>
+                <div className="text-sm font-semibold text-white mb-1 group-hover:text-white transition-colors">{feature.label}</div>
+                <div className="text-xs text-zinc-500 group-hover:text-zinc-400 transition-colors">{feature.desc}</div>
+              </div>
+              
+              {/* 3D shadow */}
+              <div className="absolute -bottom-2 left-2 right-2 h-4 bg-black/30 rounded-full blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-300" 
+                style={{ transform: "translateZ(-20px)" }}
+              />
+            </motion.div>
           ))}
         </motion.div>
       </div>
