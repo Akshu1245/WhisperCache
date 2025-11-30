@@ -334,7 +334,7 @@ export default function Hero() {
       
       {/* Main content with 3D tilt */}
       <motion.div 
-        className="relative z-10 max-w-6xl mx-auto"
+        className="relative z-40 max-w-6xl mx-auto"
         style={{ 
           transform: `perspective(1000px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`,
           transformStyle: "preserve-3d",
@@ -506,21 +506,22 @@ export default function Hero() {
                   >
                     <motion.button
                       onClick={scrollToDemo}
-                      className="group relative px-10 py-5 rounded-2xl font-bold text-lg overflow-hidden"
+                      className="group relative px-10 py-5 rounded-2xl font-bold text-lg overflow-hidden cursor-pointer"
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
+                      style={{ zIndex: 50 }}
                     >
                       {/* Animated gradient background */}
                       <motion.div
-                        className="absolute inset-0 bg-gradient-to-r from-teal-500 via-cyan-500 to-teal-500"
+                        className="absolute inset-0 bg-gradient-to-r from-teal-500 via-cyan-500 to-teal-500 pointer-events-none"
                         animate={{ x: ["-100%", "100%"] }}
                         transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
                         style={{ width: "200%" }}
                       />
                       {/* Glow effect */}
-                      <div className="absolute inset-0 bg-gradient-to-r from-teal-500 to-cyan-500 opacity-0 group-hover:opacity-100 blur-xl transition-opacity" />
+                      <div className="absolute inset-0 bg-gradient-to-r from-teal-500 to-cyan-500 opacity-0 group-hover:opacity-100 blur-xl transition-opacity pointer-events-none" />
                       {/* Button content */}
-                      <span className="relative z-10 flex items-center gap-3 text-slate-900">
+                      <span className="relative z-10 flex items-center gap-3 text-slate-900 pointer-events-none">
                         <motion.span
                           animate={{ rotate: [0, 360] }}
                           transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
@@ -539,9 +540,10 @@ export default function Hero() {
                     
                     <motion.button
                       onClick={() => document.getElementById("problem")?.scrollIntoView({ behavior: "smooth" })}
-                      className="group px-8 py-5 rounded-2xl font-semibold text-lg border-2 border-white/10 hover:border-purple-500/50 bg-white/5 hover:bg-purple-500/10 transition-all flex items-center gap-2"
+                      className="group px-8 py-5 rounded-2xl font-semibold text-lg border-2 border-white/10 hover:border-purple-500/50 bg-white/5 hover:bg-purple-500/10 transition-all flex items-center gap-2 cursor-pointer"
                       whileHover={{ scale: 1.03 }}
                       whileTap={{ scale: 0.97 }}
+                      style={{ zIndex: 50 }}
                     >
                       <span>Learn How It Works</span>
                       <motion.span
