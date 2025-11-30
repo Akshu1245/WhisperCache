@@ -6,15 +6,16 @@ const router = Router();
  * POST /api/midnight/proof
  * Simulates Midnight Compact contract execution for ZK proof generation
  */
-router.post('/proof', async (req: Request, res: Response) => {
+router.post('/proof', async (req: Request, res: Response): Promise<void> => {
   try {
     const { memoryHash } = req.body;
 
     if (!memoryHash) {
-      return res.status(400).json({
+      res.status(400).json({
         status: 'error',
         error: 'memoryHash is required'
       });
+      return;
     }
 
     // Simulate Compact contract execution time (500-900ms)
@@ -23,7 +24,7 @@ router.post('/proof', async (req: Request, res: Response) => {
 
     const proofTime = (Math.random() * 0.003 + 0.001).toFixed(4);
 
-    return res.status(200).json({
+    res.status(200).json({
       status: 'validated',
       proofSource: 'whisper_cache.compact',
       execution: `midnight-compact run whisper_cache.compact --input ${memoryHash}`,
@@ -39,7 +40,7 @@ router.post('/proof', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Midnight proof error:', error);
-    return res.status(500).json({
+    res.status(500).json({
       status: 'error',
       error: 'Failed to generate Midnight proof'
     });
@@ -50,8 +51,8 @@ router.post('/proof', async (req: Request, res: Response) => {
  * GET /api/midnight/status
  * Returns Midnight Compact system status
  */
-router.get('/status', async (_req: Request, res: Response) => {
-  return res.status(200).json({
+router.get('/status', async (_req: Request, res: Response): Promise<void> => {
+  res.status(200).json({
     system: 'midnight-compact',
     version: '1.0.0',
     contractName: 'whisper_cache.compact',
