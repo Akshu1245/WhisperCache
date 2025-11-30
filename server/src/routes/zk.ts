@@ -1145,8 +1145,8 @@ router.post('/midnight/cli-demo', async (req: Request, res: Response) => {
 router.get('/midnight/status', async (req: Request, res: Response) => {
   try {
     const [compactExists, outDirExists] = await Promise.all([
-      fs.access('/opt/midnight/compact').then(() => true).catch(() => false),
-      fs.access('/tmp/midnight/proofs').then(() => true).catch(() => false)
+      fs.access(COMPACT_CIRCUIT).then(() => true).catch(() => false),
+      fs.access(PROOF_OUTPUT_DIR).then(() => true).catch(() => false)
     ]);
 
     return res.status(200).json({
@@ -1154,7 +1154,7 @@ router.get('/midnight/status', async (req: Request, res: Response) => {
       version: '1.0.0',
       capabilities: ['proof-generation', 'proof-verification', 'witness-generation', 'on-chain-anchoring', 'cli-integration'],
       environment: {
-        midnightCliPath: '/opt/midnight',
+        midnightCliPath: MIDNIGHT_CLI_PATH,
         compactCircuitExists: compactExists,
         proofOutputDirExists: outDirExists
       },

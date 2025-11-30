@@ -76,9 +76,7 @@ export async function initDatabase(): Promise<Database> {
     return db;
   } catch (err) {
     console.error('[Database] initDatabase failed:', err);
-    // Set dbReady to true so subsequent calls don't retry and fail
-    dbReady = true;
-    // Return a minimal dummy database or null
+    // Do not set dbReady to true on failure - allow retry
     throw err;
   }
 }
