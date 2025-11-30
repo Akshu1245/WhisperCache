@@ -9,37 +9,22 @@ const steps = [
   { id: 4, label: "Verifying on Midnight", icon: "✅" },
 ];
 
-// Floating particle component
+// Floating particle component - using CSS animation for better performance
 const FloatingParticle = ({ delay, x }: { delay: number; x: number }) => (
-  <motion.div
-    className="absolute w-2 h-2 rounded-full bg-teal-500/30"
-    style={{ left: `${x}%`, top: "100%" }}
-    animate={{
-      y: [0, -500],
-      opacity: [0, 1, 0],
-      scale: [0, 1, 0],
-    }}
-    transition={{
-      duration: 4 + Math.random() * 2,
-      delay,
-      repeat: Infinity,
-      ease: "easeOut",
+  <div
+    className="absolute w-2 h-2 rounded-full bg-teal-500/30 animate-float-particle"
+    style={{ 
+      left: `${x}%`, 
+      bottom: "0%",
+      animationDelay: `${delay}s`,
     }}
   />
 );
 
-// 3D Floating Shield
+// 3D Floating Shield - using CSS animation for better performance
 const FloatingShield = () => (
-  <motion.div
-    className="absolute -right-20 top-1/4 w-40 h-40 pointer-events-none"
-    animate={{
-      y: [0, -20, 0],
-      rotateY: [0, 360],
-    }}
-    transition={{
-      y: { duration: 4, repeat: Infinity, ease: "easeInOut" },
-      rotateY: { duration: 20, repeat: Infinity, ease: "linear" },
-    }}
+  <div
+    className="absolute -right-20 top-1/4 w-40 h-40 pointer-events-none animate-float-gentle"
     style={{ perspective: "1000px" }}
   >
     <div className="w-full h-full relative" style={{ transformStyle: "preserve-3d" }}>
@@ -50,7 +35,7 @@ const FloatingShield = () => (
         <span className="text-5xl">🛡️</span>
       </div>
     </div>
-  </motion.div>
+  </div>
 );
 
 // Proof Popup Modal
@@ -415,10 +400,10 @@ export default function ZKQuerySimulator() {
         </svg>
       </div>
       
-      {/* Floating particles */}
+      {/* Floating particles - reduced for performance */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {[...Array(15)].map((_, i) => (
-          <FloatingParticle key={i} delay={i * 0.5} x={Math.random() * 100} />
+        {[...Array(8)].map((_, i) => (
+          <FloatingParticle key={i} delay={i * 0.8} x={Math.random() * 100} />
         ))}
       </div>
       

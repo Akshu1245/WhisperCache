@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useEffect, useState, memo } from "react";
 
 // Glitch text characters for cyber effect
 const glitchChars = "!@#$%^&*()_+{}|:<>?~`-=[]\\;',./";
@@ -13,23 +13,14 @@ const privacyHorrors = [
   { text: "Your financial struggles", emoji: "💸", subtext: "shared without consent" },
 ];
 
-// Floating 3D shapes
-const FloatingShape = ({ delay, duration, size, color, left, top }: any) => (
-  <motion.div
-    className="absolute pointer-events-none"
-    style={{ left: `${left}%`, top: `${top}%` }}
-    animate={{
-      y: [0, -30, 0],
-      x: [0, 15, 0],
-      rotateX: [0, 360],
-      rotateY: [0, 360],
-      scale: [1, 1.2, 1],
-    }}
-    transition={{
-      duration,
-      delay,
-      repeat: Infinity,
-      ease: "easeInOut",
+// Simplified floating shape - uses CSS animation instead of framer-motion
+const FloatingShape = memo(({ delay, size, color, left, top }: any) => (
+  <div
+    className="absolute pointer-events-none animate-float"
+    style={{ 
+      left: `${left}%`, 
+      top: `${top}%`,
+      animationDelay: `${delay}s`,
     }}
   >
     <div
@@ -40,13 +31,13 @@ const FloatingShape = ({ delay, duration, size, color, left, top }: any) => (
         transform: "perspective(1000px) rotateX(45deg) rotateY(45deg)",
       }}
     />
-  </motion.div>
-);
+  </div>
+));
 
-// Glowing orb component
-const GlowOrb = ({ color, size, x, y, blur }: any) => (
-  <motion.div
-    className="absolute rounded-full pointer-events-none"
+// Simplified glow orb - static with CSS animation
+const GlowOrb = memo(({ color, size, x, y, blur }: any) => (
+  <div
+    className="absolute rounded-full pointer-events-none animate-pulse-slow"
     style={{
       width: size,
       height: size,
@@ -54,48 +45,36 @@ const GlowOrb = ({ color, size, x, y, blur }: any) => (
       top: y,
       background: `radial-gradient(circle, ${color} 0%, transparent 70%)`,
       filter: `blur(${blur}px)`,
-    }}
-    animate={{
-      scale: [1, 1.3, 1],
-      opacity: [0.3, 0.6, 0.3],
-    }}
-    transition={{
-      duration: 4,
-      repeat: Infinity,
-      ease: "easeInOut",
+      opacity: 0.4,
     }}
   />
-);
+));
 
-// Matrix rain effect
-const MatrixRain = () => {
+// Simplified Matrix rain - reduced count
+const MatrixRain = memo(() => {
   const chars = "01";
   return (
-    <div className="absolute inset-0 overflow-hidden opacity-20 pointer-events-none">
-      {[...Array(30)].map((_, i) => (
-        <motion.div
+    <div className="absolute inset-0 overflow-hidden opacity-10 pointer-events-none">
+      {[...Array(10)].map((_, i) => (
+        <div
           key={i}
-          className="absolute text-teal-500 font-mono text-xs"
-          style={{ left: `${i * 3.5}%` }}
-          initial={{ y: -100, opacity: 0 }}
-          animate={{ y: "100vh", opacity: [0, 1, 0] }}
-          transition={{
-            duration: 5 + Math.random() * 5,
-            repeat: Infinity,
-            delay: Math.random() * 5,
-            ease: "linear",
+          className="absolute text-teal-500 font-mono text-xs animate-matrix-rain"
+          style={{ 
+            left: `${i * 10}%`,
+            animationDelay: `${Math.random() * 3}s`,
+            animationDuration: `${5 + Math.random() * 3}s`,
           }}
         >
-          {[...Array(20)].map((_, j) => (
+          {[...Array(10)].map((_, j) => (
             <div key={j} className="my-1">
               {chars[Math.floor(Math.random() * chars.length)]}
             </div>
           ))}
-        </motion.div>
+        </div>
       ))}
     </div>
   );
-};
+});
 
 // 3D Rotating Shield/Vault Visual
 const HeroVaultVisual = () => (

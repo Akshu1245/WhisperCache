@@ -1,20 +1,33 @@
-import Hero from "./components/Hero";
-import ProblemSection from "./components/ProblemSection";
-import SolutionSection from "./components/SolutionSection";
-import ZKQuerySimulator from "./components/ZKQuerySimulator";
-import MidnightCompactDemo from "./components/MidnightCompactDemo";
-import CardanoMemeSection from "./components/CardanoMemeSection";
-import NetworkStatusBar from "./components/NetworkStatusBar";
-import FutureSection from "./components/FutureSection";
-import Navbar from "./components/Navbar";
-import MemoryDashboard from "./components/MemoryDashboard";
-import AdminDashboard from "./components/AdminDashboard";
-import ErrorBoundary from "./components/ErrorBoundary";
-import ArchitectureFlowSlide from "./components/ArchitectureFlowSlide";
-import ContractLogicSlide from "./components/ContractLogicSlide";
-import GDPRDeletionDemo from "./components/GDPRDeletionDemo";
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import Navbar from "./components/Navbar";
+import Hero from "./components/Hero";
+import ErrorBoundary from "./components/ErrorBoundary";
+
+// Lazy load heavy components for faster initial load
+const ProblemSection = lazy(() => import("./components/ProblemSection"));
+const SolutionSection = lazy(() => import("./components/SolutionSection"));
+const ZKQuerySimulator = lazy(() => import("./components/ZKQuerySimulator"));
+const MidnightCompactDemo = lazy(() => import("./components/MidnightCompactDemo"));
+const CardanoMemeSection = lazy(() => import("./components/CardanoMemeSection"));
+const NetworkStatusBar = lazy(() => import("./components/NetworkStatusBar"));
+const FutureSection = lazy(() => import("./components/FutureSection"));
+const MemoryDashboard = lazy(() => import("./components/MemoryDashboard"));
+const AdminDashboard = lazy(() => import("./components/AdminDashboard"));
+const ArchitectureFlowSlide = lazy(() => import("./components/ArchitectureFlowSlide"));
+const ContractLogicSlide = lazy(() => import("./components/ContractLogicSlide"));
+const GDPRDeletionDemo = lazy(() => import("./components/GDPRDeletionDemo"));
+
+// Lightweight loading skeleton
+const SectionLoader = () => (
+  <div className="py-20 flex items-center justify-center">
+    <div className="flex items-center gap-3">
+      <div className="w-2 h-2 bg-teal-500 rounded-full animate-pulse" />
+      <div className="w-2 h-2 bg-teal-500 rounded-full animate-pulse delay-75" />
+      <div className="w-2 h-2 bg-teal-500 rounded-full animate-pulse delay-150" />
+    </div>
+  </div>
+);
 
 // Section Divider Component for clean separation
 const SectionDivider = ({ label }: { label?: string }) => (
@@ -55,7 +68,9 @@ function App() {
       <Navbar />
       
       {/* Network Status */}
-      <NetworkStatusBar />
+      <Suspense fallback={null}>
+        <NetworkStatusBar />
+      </Suspense>
 
       {/* Main Content - Clean & Organized */}
       <ErrorBoundary>
@@ -68,77 +83,99 @@ function App() {
         
         {/* ==================== PROBLEM ==================== */}
         <section id="problem" className="scroll-mt-20">
-          <ProblemSection />
+          <Suspense fallback={<SectionLoader />}>
+            <ProblemSection />
+          </Suspense>
         </section>
         
         <SectionDivider label="Our Solution" />
         
         {/* ==================== SOLUTION ==================== */}
         <section id="solution" className="scroll-mt-20">
-          <SolutionSection />
+          <Suspense fallback={<SectionLoader />}>
+            <SolutionSection />
+          </Suspense>
         </section>
         
         <SectionDivider label="Try It Live" />
         
         {/* ==================== LIVE DEMO ==================== */}
         <section id="zk" className="scroll-mt-20">
-          <ZKQuerySimulator />
+          <Suspense fallback={<SectionLoader />}>
+            <ZKQuerySimulator />
+          </Suspense>
         </section>
         
         <SectionDivider label="Your Dashboard" />
         
         {/* ==================== DASHBOARD ==================== */}
         <section id="dashboard" className="scroll-mt-20">
-          <MemoryDashboard />
+          <Suspense fallback={<SectionLoader />}>
+            <MemoryDashboard />
+          </Suspense>
         </section>
         
         <SectionDivider label="Admin Panel" />
         
         {/* ==================== ADMIN ==================== */}
         <section id="admin" className="scroll-mt-20">
-          <AdminDashboard />
+          <Suspense fallback={<SectionLoader />}>
+            <AdminDashboard />
+          </Suspense>
         </section>
         
         <SectionDivider label="Technology" />
         
         {/* ==================== TECH ==================== */}
         <section id="midnight" className="scroll-mt-20">
-          <MidnightCompactDemo />
+          <Suspense fallback={<SectionLoader />}>
+            <MidnightCompactDemo />
+          </Suspense>
         </section>
         
         <SectionDivider label="Have Fun" />
         
         {/* ==================== FUN / MEMES ==================== */}
         <section id="cardano" className="scroll-mt-20">
-          <CardanoMemeSection />
+          <Suspense fallback={<SectionLoader />}>
+            <CardanoMemeSection />
+          </Suspense>
         </section>
         
         <SectionDivider label="Architecture" />
         
         {/* ==================== ARCHITECTURE ==================== */}
         <section id="architecture" className="scroll-mt-20">
-          <ArchitectureFlowSlide />
+          <Suspense fallback={<SectionLoader />}>
+            <ArchitectureFlowSlide />
+          </Suspense>
         </section>
         
         <SectionDivider label="Smart Contracts" />
         
         {/* ==================== CONTRACT LOGIC ==================== */}
         <section id="contracts" className="scroll-mt-20">
-          <ContractLogicSlide />
+          <Suspense fallback={<SectionLoader />}>
+            <ContractLogicSlide />
+          </Suspense>
         </section>
         
         <SectionDivider label="GDPR Compliance" />
         
         {/* ==================== GDPR DELETION ==================== */}
         <section id="gdpr" className="scroll-mt-20">
-          <GDPRDeletionDemo />
+          <Suspense fallback={<SectionLoader />}>
+            <GDPRDeletionDemo />
+          </Suspense>
         </section>
         
         <SectionDivider label="What's Next" />
         
         {/* ==================== VISION / FUTURE ==================== */}
         <section id="future" className="scroll-mt-20">
-          <FutureSection />
+          <Suspense fallback={<SectionLoader />}>
+            <FutureSection />
+          </Suspense>
         </section>
         
         {/* Footer spacing */}
