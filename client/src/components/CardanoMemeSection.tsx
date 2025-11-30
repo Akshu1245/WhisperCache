@@ -129,10 +129,20 @@ function FallingEmojis({ emoji, isActive }: { emoji: string; isActive: boolean }
   );
 }
 
-// 3D Card for features
+// 3D Card for features - Floating to corners
 function FeatureCard3D({ card, index }: { card: { icon: React.ReactNode; title: string; desc: string; stat: string; color: string }; index: number }) {
   const [transform, setTransform] = useState({ rotateX: 0, rotateY: 0, scale: 1 });
   const [glowPos, setGlowPos] = useState({ x: 50, y: 50 });
+  const [isHovered, setIsHovered] = useState(false);
+
+  // Position cards in corners - left, center, right with floating animation
+  const positions = [
+    { x: -20, y: 0, rotate: -8 },   // Left corner - tilted left
+    { x: 0, y: -15, rotate: 0 },    // Center - elevated
+    { x: 20, y: 0, rotate: 8 },     // Right corner - tilted right
+  ];
+
+  const pos = positions[index];
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -141,90 +151,170 @@ function FeatureCard3D({ card, index }: { card: { icon: React.ReactNode; title: 
     const centerX = rect.width / 2;
     const centerY = rect.height / 2;
     setTransform({
-      rotateX: ((y - centerY) / centerY) * -15,
-      rotateY: ((x - centerX) / centerX) * 15,
-      scale: 1.05,
+      rotateX: ((y - centerY) / centerY) * -20,
+      rotateY: ((x - centerX) / centerX) * 20,
+      scale: 1.1,
     });
     setGlowPos({ x: (x / rect.width) * 100, y: (y / rect.height) * 100 });
+    setIsHovered(true);
   };
 
   const handleMouseLeave = () => {
     setTransform({ rotateX: 0, rotateY: 0, scale: 1 });
     setGlowPos({ x: 50, y: 50 });
+    setIsHovered(false);
   };
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 40, rotateX: -10 }}
-      whileInView={{ opacity: 1, y: 0, rotateX: 0 }}
+      initial={{ opacity: 0, y: 80, rotateX: -30, rotateZ: pos.rotate }}
+      whileInView={{ 
+        opacity: 1, 
+        y: 0, 
+        rotateX: 0,
+        rotateZ: pos.rotate,
+      }}
       viewport={{ once: true }}
-      transition={{ delay: index * 0.15, type: "spring", stiffness: 100 }}
+      transition={{ 
+        delay: index * 0.2, 
+        type: "spring", 
+        stiffness: 80,
+        damping: 15
+      }}
+      animate={{
+        y: isHovered ? pos.y : [pos.y, pos.y - 10, pos.y],
+        x: pos.x,
+        rotateZ: isHovered ? 0 : pos.rotate,
+      }}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
       style={{
-        transform: `perspective(1000px) rotateX(${transform.rotateX}deg) rotateY(${transform.rotateY}deg) scale(${transform.scale})`,
+        transform: `perspective(1200px) rotateX(${transform.rotateX}deg) rotateY(${transform.rotateY}deg) scale(${transform.scale})`,
         transformStyle: "preserve-3d",
-        transition: "transform 0.15s ease-out",
+        transition: "transform 0.2s ease-out",
       }}
-      className="relative p-6 rounded-2xl cursor-pointer group overflow-hidden"
+      className="relative p-7 rounded-3xl cursor-pointer group overflow-hidden"
     >
+      {/* Outer glow ring */}
+      <motion.div
+        className="absolute -inset-2 rounded-3xl opacity-0 group-hover:opacity-100"
+        style={{
+          background: `linear-gradient(135deg, ${card.color.replace('0.3', '0.6')}, transparent 60%)`,
+          filter: "blur(20px)",
+        }}
+        animate={{
+          scale: isHovered ? [1, 1.05, 1] : 1,
+        }}
+        transition={{ duration: 1.5, repeat: Infinity }}
+      />
+
       {/* Background with glassmorphism */}
       <div 
-        className="absolute inset-0 rounded-2xl"
+        className="absolute inset-0 rounded-3xl"
         style={{
-          background: "linear-gradient(145deg, rgba(39, 39, 42, 0.8), rgba(24, 24, 27, 0.9))",
-          boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255,255,255,0.1)",
+          background: "linear-gradient(145deg, rgba(39, 39, 42, 0.9), rgba(24, 24, 27, 0.95))",
+          boxShadow: isHovered 
+            ? `0 40px 80px -20px rgba(0, 0, 0, 0.7), 0 0 60px ${card.color.replace('0.3', '0.4')}, inset 0 1px 0 rgba(255,255,255,0.15)`
+            : "0 25px 50px -12px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255,255,255,0.1)",
+          transition: "box-shadow 0.3s ease",
         }}
       />
       
-      {/* Dynamic glow */}
-      <div
-        className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+      {/* Dynamic glow that follows cursor */}
+      <motion.div
+        className="absolute inset-0 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
         style={{
-          background: `radial-gradient(circle at ${glowPos.x}% ${glowPos.y}%, ${card.color}, transparent 60%)`,
+          background: `radial-gradient(circle at ${glowPos.x}% ${glowPos.y}%, ${card.color}, transparent 50%)`,
         }}
       />
       
-      {/* Animated border */}
-      <div className="absolute inset-0 rounded-2xl border border-white/[0.08] group-hover:border-white/20 transition-colors" />
+      {/* Animated border gradient */}
+      <motion.div 
+        className="absolute inset-0 rounded-3xl border-2 border-transparent group-hover:opacity-100 opacity-50 transition-opacity"
+        style={{ 
+          borderImage: `linear-gradient(135deg, ${card.color.replace('0.3', '0.8')}, transparent 60%) 1`,
+        }}
+      />
       
-      {/* Content */}
-      <div className="relative z-10" style={{ transform: "translateZ(30px)" }}>
-        {/* Icon with glow */}
-        <div 
-          className="w-14 h-14 rounded-xl flex items-center justify-center mb-4 relative"
+      {/* Content with 3D depth */}
+      <div className="relative z-10" style={{ transform: "translateZ(40px)" }}>
+        {/* Floating icon with enhanced glow */}
+        <motion.div 
+          className="w-16 h-16 rounded-2xl flex items-center justify-center mb-5 relative"
           style={{ 
-            background: `linear-gradient(135deg, ${card.color.replace('0.3', '0.4')})`,
-            transform: "translateZ(40px)" 
+            background: `linear-gradient(135deg, ${card.color.replace('0.3', '0.5')}, ${card.color.replace('0.3', '0.2')})`,
+            transform: "translateZ(50px)",
+            boxShadow: `0 10px 40px ${card.color}`,
+          }}
+          animate={{
+            y: isHovered ? [-2, 2, -2] : 0,
+            rotate: isHovered ? [0, 5, -5, 0] : 0,
+          }}
+          transition={{ duration: 2, repeat: Infinity }}
+        >
+          <div 
+            className="absolute inset-0 rounded-2xl blur-2xl opacity-80" 
+            style={{ background: card.color }} 
+          />
+          <div className="relative text-white scale-110">{card.icon}</div>
+        </motion.div>
+        
+        <motion.h3 
+          className="font-bold text-xl text-white mb-2" 
+          style={{ transform: "translateZ(35px)" }}
+          animate={{ 
+            textShadow: isHovered ? `0 0 20px ${card.color}` : "none" 
           }}
         >
-          <div className="absolute inset-0 rounded-xl blur-xl opacity-60" style={{ background: card.color }} />
-          <div className="relative text-white">{card.icon}</div>
-        </div>
-        
-        <h3 className="font-bold text-lg text-white mb-2" style={{ transform: "translateZ(25px)" }}>
           {card.title}
-        </h3>
-        <p className="text-zinc-400 text-sm mb-4 leading-relaxed" style={{ transform: "translateZ(20px)" }}>
+        </motion.h3>
+        <p 
+          className="text-zinc-400 text-sm mb-5 leading-relaxed" 
+          style={{ transform: "translateZ(25px)" }}
+        >
           {card.desc}
         </p>
         
-        {/* Stat badge */}
-        <div 
-          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10"
-          style={{ transform: "translateZ(35px)" }}
+        {/* Enhanced stat badge */}
+        <motion.div 
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 backdrop-blur-sm"
+          style={{ transform: "translateZ(45px)" }}
+          whileHover={{ scale: 1.05, borderColor: "rgba(255,255,255,0.3)" }}
         >
-          <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse" />
-          <span className="text-xs text-teal-400 font-medium">{card.stat}</span>
-        </div>
+          <motion.span 
+            className="w-2 h-2 rounded-full bg-teal-400"
+            animate={{ 
+              scale: [1, 1.3, 1],
+              boxShadow: ["0 0 0 rgba(20,184,166,0.4)", "0 0 10px rgba(20,184,166,0.8)", "0 0 0 rgba(20,184,166,0.4)"]
+            }}
+            transition={{ duration: 1.5, repeat: Infinity }}
+          />
+          <span className="text-sm text-teal-400 font-semibold">{card.stat}</span>
+        </motion.div>
       </div>
       
-      {/* Shine effect */}
-      <div 
-        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+      {/* Shine sweep effect */}
+      <motion.div 
+        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none overflow-hidden rounded-3xl"
+      >
+        <motion.div
+          className="absolute inset-0"
+          style={{
+            background: `linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.15) 50%, transparent 60%)`,
+          }}
+          initial={{ x: "-100%" }}
+          animate={{ x: isHovered ? "100%" : "-100%" }}
+          transition={{ duration: 0.6, ease: "easeOut" }}
+        />
+      </motion.div>
+
+      {/* 3D Shadow */}
+      <motion.div
+        className="absolute -bottom-4 left-4 right-4 h-8 rounded-full opacity-50 group-hover:opacity-80 transition-opacity"
         style={{
-          background: `linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.1) 50%, transparent 60%)`,
-          transform: `translateX(${(glowPos.x - 50) * 2}%)`,
+          background: "radial-gradient(ellipse, rgba(0,0,0,0.5), transparent 70%)",
+          filter: "blur(8px)",
+          transform: "translateZ(-30px) rotateX(90deg)",
         }}
       />
     </motion.div>
