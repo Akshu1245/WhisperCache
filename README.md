@@ -7,17 +7,6 @@
 
 ---
 
-## 🎯 Prize Targets
-
-| Prize | Amount | Our Approach |
-|-------|--------|--------------|
-| 🥇 1st Place | $10,000 | Full ZK privacy stack with Midnight Compact |
-| ✨ Best UI/UX | $2,000 | Premium glassmorphism + 3D animations |
-| 🔐 Privacy in Action | $2,000 | Interactive before/after privacy demo |
-| 🦊 Best Meme Integration | $2,000 | Cardano meme corner with Easter eggs |
-
----
-
 ## 🧠 The Problem
 Current AI assistants store raw user memories on cloud servers, risking exposure:
 - 💬 Your therapy conversations → readable by employees
@@ -149,7 +138,7 @@ const { proof, publicSignals } = await snarkjs.groth16.fullProve(
 
 ```bash
 # Clone repository
-git clone https://github.com/your-org/whispercache.git
+git clone https://github.com/akshu1245/whispercache.git
 cd whispercache
 
 # Install server dependencies
