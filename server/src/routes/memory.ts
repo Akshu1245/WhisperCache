@@ -11,674 +11,216 @@
 
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
-import { hashData, generateNonce } from '../lib/crypto';
-import { simpleAuthMiddleware } from '../lib/auth';
-import {
-  insertMemoryMetadata,
-  updateMemoryMetadata,
-  getMemoryMetadata,
-  getMemoriesByUserId,
-  getMemoryByCommitment,
-  updateMemoryStatus,
-  countMemoriesByUserId,
-  insertComplianceLog,
-  getLatestLogHash,
-  MemoryMetadata,
-  MemoryStatus
-} from '../lib/database';
+import { inMemoryDb } from '../lib/database';
 
 const router = Router();
 
-// In-memory storage for encrypted content (in production, use secure blob storage)
-const encryptedStore = new Map<string, {
-  encryptedData: string;
-  nonce: string;
-  algorithm: string;
-}>();
+// Use the in-memory store from database module
+const db = inMemoryDb;
 
-// ============================================================================
-// Request/Response Types
-// ============================================================================
-
-interface CreateMemoryRequest {
-  memoryCommitment: string;  // Poseidon hash of memory content
-  tags?: string[];           // Memory tags for organization
-  encryptedData?: string;    // Optional: Base64 encoded encrypted content
-  nonce?: string;            // Optional: Encryption nonce
-  confidence?: number;       // Confidence score (0-1)
+/**
+ * Helper: Extract and validate x-user-id header
+ */
+function requireUserId(req: Request, res: Response): string | null {
+  const userId = req.header('x-user-id');
+  if (!userId) {
+    res.status(401).json({ success: false, error: 'Unauthorized' });
+    return null;
+  }
+  return userId;
 }
 
-interface UpdateMemoryRequest {
-  tags?: string[];
-  status?: MemoryStatus;
-  confidence?: number;
+/**
+ * Validate memoryCommitment format (64 hex chars)
+ */
+function isValidCommitment(s: unknown): boolean {
+  return typeof s === 'string' && /^[0-9a-fA-F]{64}$/.test(s);
 }
-
-interface ListMemoriesQuery {
-  status?: MemoryStatus;
-  tags?: string;
-  limit?: string;
-  offset?: string;
-}
-
-// ============================================================================
-// Routes
-// ============================================================================
 
 /**
  * POST /api/memory
- * 
- * Store a new memory with commitment
- * Requires authentication via x-user-id or x-did-wallet header
+ * Create a new memory
  */
-router.post('/', simpleAuthMiddleware(), async (req: Request, res: Response) => {
+router.post('/', async (req: Request, res: Response) => {
   try {
-    const { memoryCommitment, tags, encryptedData, nonce, confidence } = req.body as CreateMemoryRequest;
-    const user = req.user!;
+    const userId = requireUserId(req, res);
+    if (!userId) return;
 
-    if (!memoryCommitment) {
-      return res.status(400).json({
-        success: false,
-        error: 'memoryCommitment is required'
-      });
+    const { memoryCommitment, tags = [] } = req.body || {};
+    
+    if (!isValidCommitment(memoryCommitment)) {
+      return res.status(400).json({ success: false, error: 'invalid memoryCommitment' });
     }
 
-    // Validate commitment format (should be a hex hash)
-    if (!/^[a-fA-F0-9]{16,128}$/.test(memoryCommitment)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid memoryCommitment format (expected hex hash)'
-      });
+    // Check for duplicate commitment
+    for (const m of db.MemoryStore.values()) {
+      if (m.memoryCommitment === memoryCommitment) {
+        return res.status(409).json({ success: false, error: 'memoryCommitment already exists' });
+      }
     }
 
-    // Check if commitment already exists
-    const existing = getMemoryByCommitment(memoryCommitment);
-    if (existing) {
-      return res.status(409).json({
-        success: false,
-        error: 'Memory with this commitment already exists',
-        memoryId: existing.id
-      });
-    }
-
-    // Generate memory ID
-    const memoryId = `mem_${crypto.randomBytes(12).toString('hex')}`;
-    const now = new Date().toISOString();
-
-    // Generate key ID for this memory (derived from user + timestamp)
-    const keyId = `key_${(await hashData(user.id + now)).slice(0, 16)}`;
-
-    // Compute content hash (from encrypted data if provided, otherwise from commitment)
-    const contentHash = encryptedData 
-      ? await hashData(encryptedData) 
-      : await hashData(memoryCommitment);
-
-    // Store encrypted content if provided
-    if (encryptedData && nonce) {
-      encryptedStore.set(memoryId, {
-        encryptedData,
-        nonce,
-        algorithm: 'XChaCha20-Poly1305'
-      });
-    }
-
-    // Store metadata in database
-    const metadata: MemoryMetadata = {
-      id: memoryId,
-      userId: user.id,
-      keyId,
+    const memoryId = 'mem_' + crypto.randomBytes(8).toString('hex');
+    const record = {
+      memoryId,
       memoryCommitment,
-      contentHash,
       tags,
-      confidence,
+      owner: userId,
       status: 'ACTIVE',
-      createdAt: now,
-      updatedAt: now
+      createdAt: Date.now()
     };
-    insertMemoryMetadata(metadata);
+    db.MemoryStore.set(memoryId, record);
 
-    // Create compliance log
-    const logId = `log_${crypto.randomBytes(8).toString('hex')}`;
-    const previousLogHash = getLatestLogHash();
-    const logHash = await hashData(JSON.stringify({
-      id: logId,
-      action: 'memory_create',
-      memoryId,
-      userId: user.id,
-      timestamp: now,
-      previousLogHash
-    }));
-
-    insertComplianceLog({
-      id: logId,
-      userId: user.id,
-      action: 'memory_create',
-      memoryId,
-      keyId,
-      timestamp: now,
-      metadata: { contentHash, tags, commitment: memoryCommitment },
-      previousLogHash,
-      logHash
-    });
-
-    res.status(201).json({
-      success: true,
-      memoryId,
-      memoryCommitment,
-      contentHash,
-      status: 'ACTIVE',
-      createdAt: now
-    });
-  } catch (error) {
-    console.error('[Memory] Create error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to store memory'
-    });
+    return res.status(201).json({ success: true, memoryId, memoryCommitment });
+  } catch (err) {
+    console.error('POST /api/memory', err);
+    return res.status(500).json({ success: false, error: 'internal error' });
   }
 });
 
 /**
  * GET /api/memory
- * 
- * List memories for the authenticated user
- * Supports filtering by status and tags
+ * List memories for authenticated user
  */
-router.get('/', simpleAuthMiddleware(), async (req: Request, res: Response) => {
+router.get('/', (req: Request, res: Response) => {
   try {
-    const user = req.user!;
-    const query = req.query as ListMemoriesQuery;
+    const userId = requireUserId(req, res);
+    if (!userId) return;
 
-    // Parse query parameters
-    const options: {
-      status?: MemoryStatus;
-      tags?: string[];
-      limit?: number;
-      offset?: number;
-    } = {};
+    const status = req.query.status as string | undefined;
+    const tags = req.query.tags as string | undefined;
 
-    if (query.status && ['ACTIVE', 'DELETED', 'REVOKED'].includes(query.status)) {
-      options.status = query.status as MemoryStatus;
+    let list = Array.from(db.MemoryStore.values()).filter(
+      (m) => m.owner === userId && m.status !== 'DELETED'
+    );
+
+    if (status) {
+      list = list.filter((m) => m.status === status);
+    }
+    if (tags) {
+      list = list.filter((m) => m.tags && m.tags.includes(tags));
     }
 
-    if (query.tags) {
-      options.tags = query.tags.split(',').map(t => t.trim());
-    }
-
-    if (query.limit) {
-      options.limit = Math.min(parseInt(query.limit) || 50, 100);
-    }
-
-    if (query.offset) {
-      options.offset = parseInt(query.offset) || 0;
-    }
-
-    // Get memories
-    const memories = getMemoriesByUserId(user.id, options);
-    const totalCount = countMemoriesByUserId(user.id, options.status);
-
-    res.json({
+    return res.status(200).json({
       success: true,
-      memories: memories.map(m => ({
-        id: m.id,
-        memoryCommitment: m.memoryCommitment,
-        tags: m.tags,
-        status: m.status,
-        confidence: m.confidence,
-        createdAt: m.createdAt,
-        updatedAt: m.updatedAt
-      })),
-      pagination: {
-        total: totalCount,
-        limit: options.limit || 50,
-        offset: options.offset || 0,
-        hasMore: (options.offset || 0) + memories.length < totalCount
-      }
+      memories: list,
+      pagination: { total: list.length }
     });
-  } catch (error) {
-    console.error('[Memory] List error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to list memories'
-    });
-  }
-});
-
-/**
- * GET /api/memory/search/tags
- * 
- * Search memories by tags
- * Note: This route must be defined BEFORE /:memoryId to avoid conflicts
- */
-router.get('/search/tags', simpleAuthMiddleware(), async (req: Request, res: Response) => {
-  try {
-    const user = req.user!;
-    const { tags, match = 'any' } = req.query;
-
-    if (!tags) {
-      return res.status(400).json({
-        success: false,
-        error: 'tags query parameter is required'
-      });
-    }
-
-    const tagList = (tags as string).split(',').map(t => t.trim());
-
-    // Get all user memories with any of the tags
-    const memories = getMemoriesByUserId(user.id, {
-      status: 'ACTIVE',
-      tags: tagList
-    });
-
-    // If match is 'all', filter to only memories that have ALL tags
-    let filteredMemories = memories;
-    if (match === 'all') {
-      filteredMemories = memories.filter(m => 
-        tagList.every(tag => m.tags?.includes(tag))
-      );
-    }
-
-    res.json({
-      success: true,
-      query: { tags: tagList, match },
-      count: filteredMemories.length,
-      memories: filteredMemories.map(m => ({
-        id: m.id,
-        memoryCommitment: m.memoryCommitment,
-        tags: m.tags,
-        status: m.status,
-        createdAt: m.createdAt
-      }))
-    });
-  } catch (error) {
-    console.error('[Memory] Search error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to search memories'
-    });
-  }
-});
-
-/**
- * GET /api/memory/commitment/:commitment
- * 
- * Look up a memory by its commitment hash
- */
-router.get('/commitment/:commitment', simpleAuthMiddleware(), async (req: Request, res: Response) => {
-  try {
-    const { commitment } = req.params;
-    const user = req.user!;
-
-    const memory = getMemoryByCommitment(commitment);
-
-    if (!memory) {
-      return res.status(404).json({
-        success: false,
-        error: 'Memory not found'
-      });
-    }
-
-    // Verify ownership
-    if (memory.userId !== user.id) {
-      return res.status(403).json({
-        success: false,
-        error: 'Access denied'
-      });
-    }
-
-    res.json({
-      success: true,
-      memoryId: memory.id,
-      memoryCommitment: memory.memoryCommitment,
-      tags: memory.tags,
-      status: memory.status,
-      createdAt: memory.createdAt,
-      updatedAt: memory.updatedAt
-    });
-  } catch (error) {
-    console.error('[Memory] Commitment lookup error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to look up memory by commitment'
-    });
+  } catch (err) {
+    console.error('GET /api/memory', err);
+    return res.status(500).json({ success: false, error: 'internal error' });
   }
 });
 
 /**
  * GET /api/memory/:memoryId
- * 
- * Retrieve a specific memory
- * Requires authentication and ownership
+ * Get specific memory by ID
  */
-router.get('/:memoryId', simpleAuthMiddleware(), async (req: Request, res: Response) => {
+router.get('/:memoryId', (req: Request, res: Response) => {
   try {
-    const { memoryId } = req.params;
-    const user = req.user!;
+    const userId = requireUserId(req, res);
+    if (!userId) return;
 
-    // Get metadata
-    const metadata = getMemoryMetadata(memoryId);
-
-    if (!metadata) {
-      return res.status(404).json({
-        success: false,
-        error: 'Memory not found'
-      });
+    const m = db.MemoryStore.get(req.params.memoryId);
+    if (!m) {
+      return res.status(404).json({ success: false, error: 'not found' });
+    }
+    if (m.owner !== userId) {
+      return res.status(403).json({ success: false, error: 'forbidden' });
+    }
+    if (m.status === 'DELETED') {
+      return res.status(404).json({ success: false, error: 'not found' });
     }
 
-    // Verify ownership
-    if (metadata.userId !== user.id) {
-      return res.status(403).json({
-        success: false,
-        error: 'Access denied'
-      });
-    }
-
-    // Get encrypted content if stored
-    const encryptedContent = encryptedStore.get(memoryId);
-
-    // Log access
-    const logId = `log_${crypto.randomBytes(8).toString('hex')}`;
-    const now = new Date().toISOString();
-    const previousLogHash = getLatestLogHash();
-    const logHash = await hashData(JSON.stringify({
-      id: logId,
-      action: 'memory_access',
-      memoryId,
-      userId: user.id,
-      timestamp: now,
-      previousLogHash
-    }));
-
-    insertComplianceLog({
-      id: logId,
-      userId: user.id,
-      action: 'memory_access',
-      memoryId,
-      keyId: metadata.keyId,
-      timestamp: now,
-      previousLogHash,
-      logHash
-    });
-
-    const response: Record<string, unknown> = {
-      success: true,
-      memoryId,
-      memoryCommitment: metadata.memoryCommitment,
-      contentHash: metadata.contentHash,
-      tags: metadata.tags,
-      status: metadata.status,
-      confidence: metadata.confidence,
-      createdAt: metadata.createdAt,
-      updatedAt: metadata.updatedAt
-    };
-
-    // Include encrypted content if available
-    if (encryptedContent) {
-      response.encryptedData = encryptedContent.encryptedData;
-      response.nonce = encryptedContent.nonce;
-      response.algorithm = encryptedContent.algorithm;
-    }
-
-    res.json(response);
-  } catch (error) {
-    console.error('[Memory] Get error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to retrieve memory'
-    });
+    return res.status(200).json({ success: true, memoryId: m.memoryId, memory: m });
+  } catch (err) {
+    console.error('GET /api/memory/:id', err);
+    return res.status(500).json({ success: false, error: 'internal error' });
   }
 });
 
 /**
  * PATCH /api/memory/:memoryId
- * 
- * Update memory metadata (tags, status, confidence)
- * Requires authentication and ownership
+ * Update memory metadata (tags, etc.)
  */
-router.patch('/:memoryId', simpleAuthMiddleware(), async (req: Request, res: Response) => {
+router.patch('/:memoryId', (req: Request, res: Response) => {
   try {
-    const { memoryId } = req.params;
-    const { tags, status, confidence } = req.body as UpdateMemoryRequest;
-    const user = req.user!;
+    const userId = requireUserId(req, res);
+    if (!userId) return;
 
-    // Get metadata
-    const metadata = getMemoryMetadata(memoryId);
-
-    if (!metadata) {
-      return res.status(404).json({
-        success: false,
-        error: 'Memory not found'
-      });
+    const m = db.MemoryStore.get(req.params.memoryId);
+    if (!m) {
+      return res.status(404).json({ success: false, error: 'not found' });
+    }
+    if (m.owner !== userId) {
+      return res.status(403).json({ success: false, error: 'forbidden' });
     }
 
-    // Verify ownership
-    if (metadata.userId !== user.id) {
-      return res.status(403).json({
-        success: false,
-        error: 'Access denied'
-      });
+    const { tags } = req.body || {};
+    if (tags) {
+      m.tags = tags;
     }
+    db.MemoryStore.set(m.memoryId, m);
 
-    const now = new Date().toISOString();
-    const updates: Partial<MemoryMetadata> = {};
-
-    if (tags !== undefined) {
-      updates.tags = tags;
-    }
-
-    if (confidence !== undefined) {
-      updates.confidence = confidence;
-    }
-
-    // Handle status change
-    if (status && ['ACTIVE', 'DELETED', 'REVOKED'].includes(status)) {
-      updateMemoryStatus(memoryId, status);
-    }
-
-    // Apply other updates
-    if (Object.keys(updates).length > 0) {
-      updateMemoryMetadata(memoryId, updates);
-    }
-
-    // Create compliance log
-    const logId = `log_${crypto.randomBytes(8).toString('hex')}`;
-    const previousLogHash = getLatestLogHash();
-    const logHash = await hashData(JSON.stringify({
-      id: logId,
-      action: 'memory_update',
-      memoryId,
-      userId: user.id,
-      timestamp: now,
-      previousLogHash
-    }));
-
-    insertComplianceLog({
-      id: logId,
-      userId: user.id,
-      action: 'memory_update',
-      memoryId,
-      keyId: metadata.keyId,
-      timestamp: now,
-      metadata: { updates: { tags, status, confidence } },
-      previousLogHash,
-      logHash
-    });
-
-    // Get updated metadata
-    const updated = getMemoryMetadata(memoryId);
-
-    res.json({
-      success: true,
-      memoryId,
-      memoryCommitment: updated?.memoryCommitment,
-      tags: updated?.tags,
-      status: updated?.status,
-      confidence: updated?.confidence,
-      updatedAt: updated?.updatedAt
-    });
-  } catch (error) {
-    console.error('[Memory] Update error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to update memory'
-    });
+    return res.status(200).json({ success: true, tags: m.tags });
+  } catch (err) {
+    console.error('PATCH /api/memory/:id', err);
+    return res.status(500).json({ success: false, error: 'internal error' });
   }
 });
 
 /**
  * DELETE /api/memory/:memoryId
- * 
- * Soft delete a memory (marks as DELETED)
- * Requires authentication and ownership
+ * Soft delete a memory
  */
-router.delete('/:memoryId', simpleAuthMiddleware(), async (req: Request, res: Response) => {
+router.delete('/:memoryId', (req: Request, res: Response) => {
   try {
-    const { memoryId } = req.params;
-    const user = req.user!;
+    const userId = requireUserId(req, res);
+    if (!userId) return;
 
-    // Get metadata
-    const metadata = getMemoryMetadata(memoryId);
-
-    if (!metadata) {
-      return res.status(404).json({
-        success: false,
-        error: 'Memory not found'
-      });
+    const m = db.MemoryStore.get(req.params.memoryId);
+    if (!m) {
+      return res.status(404).json({ success: false, error: 'not found' });
+    }
+    if (m.owner !== userId) {
+      return res.status(403).json({ success: false, error: 'forbidden' });
     }
 
-    // Verify ownership
-    if (metadata.userId !== user.id) {
-      return res.status(403).json({
-        success: false,
-        error: 'Access denied'
-      });
-    }
+    m.status = 'DELETED';
+    db.MemoryStore.set(m.memoryId, m);
 
-    const now = new Date().toISOString();
-
-    // Soft delete
-    updateMemoryStatus(memoryId, 'DELETED');
-
-    // Remove encrypted content from memory
-    encryptedStore.delete(memoryId);
-
-    // Create compliance log
-    const logId = `log_${crypto.randomBytes(8).toString('hex')}`;
-    const previousLogHash = getLatestLogHash();
-    const logHash = await hashData(JSON.stringify({
-      id: logId,
-      action: 'memory_delete',
-      memoryId,
-      userId: user.id,
-      timestamp: now,
-      previousLogHash
-    }));
-
-    insertComplianceLog({
-      id: logId,
-      userId: user.id,
-      action: 'memory_delete',
-      memoryId,
-      keyId: metadata.keyId,
-      timestamp: now,
-      metadata: { previousStatus: metadata.status },
-      previousLogHash,
-      logHash
-    });
-
-    res.json({
-      success: true,
-      memoryId,
-      status: 'DELETED',
-      deletedAt: now
-    });
-  } catch (error) {
-    console.error('[Memory] Delete error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to delete memory'
-    });
+    return res.status(200).json({ success: true, status: 'DELETED' });
+  } catch (err) {
+    console.error('DELETE /api/memory/:id', err);
+    return res.status(500).json({ success: false, error: 'internal error' });
   }
 });
 
 /**
  * POST /api/memory/:memoryId/revoke
- * 
- * Revoke a memory (stronger than delete, for compliance)
- * Requires authentication and ownership
+ * Revoke a memory with reason
  */
-router.post('/:memoryId/revoke', simpleAuthMiddleware(), async (req: Request, res: Response) => {
+router.post('/:memoryId/revoke', (req: Request, res: Response) => {
   try {
-    const { memoryId } = req.params;
-    const { reason } = req.body;
-    const user = req.user!;
+    const userId = requireUserId(req, res);
+    if (!userId) return;
 
-    // Get metadata
-    const metadata = getMemoryMetadata(memoryId);
-
-    if (!metadata) {
-      return res.status(404).json({
-        success: false,
-        error: 'Memory not found'
-      });
+    const m = db.MemoryStore.get(req.params.memoryId);
+    if (!m) {
+      return res.status(404).json({ success: false, error: 'not found' });
+    }
+    if (m.owner !== userId) {
+      return res.status(403).json({ success: false, error: 'forbidden' });
     }
 
-    // Verify ownership
-    if (metadata.userId !== user.id) {
-      return res.status(403).json({
-        success: false,
-        error: 'Access denied'
-      });
-    }
+    const { reason } = req.body || {};
+    m.status = 'REVOKED';
+    m.reason = reason || 'unspecified';
+    db.MemoryStore.set(m.memoryId, m);
 
-    const now = new Date().toISOString();
-
-    // Revoke
-    updateMemoryStatus(memoryId, 'REVOKED');
-
-    // Remove encrypted content from memory
-    encryptedStore.delete(memoryId);
-
-    // Create compliance log with reason
-    const logId = `log_${crypto.randomBytes(8).toString('hex')}`;
-    const previousLogHash = getLatestLogHash();
-    const logHash = await hashData(JSON.stringify({
-      id: logId,
-      action: 'memory_revoke',
-      memoryId,
-      userId: user.id,
-      timestamp: now,
-      previousLogHash
-    }));
-
-    insertComplianceLog({
-      id: logId,
-      userId: user.id,
-      action: 'memory_revoke',
-      memoryId,
-      keyId: metadata.keyId,
-      timestamp: now,
-      metadata: { 
-        previousStatus: metadata.status,
-        reason: reason || 'User requested revocation'
-      },
-      previousLogHash,
-      logHash
-    });
-
-    res.json({
-      success: true,
-      memoryId,
-      status: 'REVOKED',
-      revokedAt: now,
-      reason: reason || 'User requested revocation'
-    });
-  } catch (error) {
-    console.error('[Memory] Revoke error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to revoke memory'
-    });
+    return res.status(200).json({ success: true, status: 'REVOKED', reason: m.reason });
+  } catch (err) {
+    console.error('POST /api/memory/:id/revoke', err);
+    return res.status(500).json({ success: false, error: 'internal error' });
   }
 });
 

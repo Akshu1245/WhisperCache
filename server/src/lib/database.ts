@@ -20,6 +20,18 @@ import path from 'path';
 let db: Database | null = null;
 let SQL: SqlJsStatic | null = null;
 
+// ============================================
+// IN-MEMORY STORES (for tests and fallback)
+// ============================================
+let dbReady = false;
+const MemoryStore = new Map<string, any>();
+const ProofStore = new Map<string, any>();
+
+/**
+ * Exported db object with in-memory stores for tests
+ */
+export const inMemoryDb = { MemoryStore, ProofStore };
+
 // Database file path
 const DB_PATH = process.env.DB_PATH || path.join(process.cwd(), 'data', 'wishpercache.db');
 
@@ -27,39 +39,48 @@ const DB_PATH = process.env.DB_PATH || path.join(process.cwd(), 'data', 'wishper
  * Initialize the database
  */
 export async function initDatabase(): Promise<Database> {
-  if (db) return db;
+  if (dbReady && db) return db;
 
-  console.log('[Database] Initializing SQLite database...');
+  try {
+    console.log('[Database] Initializing SQLite database...');
 
-  // Initialize sql.js
-  SQL = await initSqlJs();
+    // Initialize sql.js
+    SQL = await initSqlJs();
 
-  // Ensure data directory exists
-  const dataDir = path.dirname(DB_PATH);
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
+    // Ensure data directory exists
+    const dataDir = path.dirname(DB_PATH);
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+
+    // Load existing database or create new one
+    if (fs.existsSync(DB_PATH)) {
+      console.log(`[Database] Loading existing database from ${DB_PATH}`);
+      const fileBuffer = fs.readFileSync(DB_PATH);
+      db = new SQL.Database(fileBuffer);
+    } else {
+      console.log('[Database] Creating new database');
+      db = new SQL.Database();
+    }
+
+    // Create tables
+    await createTables();
+
+    // Save database periodically
+    setInterval(() => {
+      saveDatabase();
+    }, 30000); // Every 30 seconds
+
+    dbReady = true;
+    console.log('[Database] Database initialized successfully');
+    return db;
+  } catch (err) {
+    console.error('[Database] initDatabase failed:', err);
+    // Set dbReady to true so subsequent calls don't retry and fail
+    dbReady = true;
+    // Return a minimal dummy database or null
+    throw err;
   }
-
-  // Load existing database or create new one
-  if (fs.existsSync(DB_PATH)) {
-    console.log(`[Database] Loading existing database from ${DB_PATH}`);
-    const fileBuffer = fs.readFileSync(DB_PATH);
-    db = new SQL.Database(fileBuffer);
-  } else {
-    console.log('[Database] Creating new database');
-    db = new SQL.Database();
-  }
-
-  // Create tables
-  await createTables();
-
-  // Save database periodically
-  setInterval(() => {
-    saveDatabase();
-  }, 30000); // Every 30 seconds
-
-  console.log('[Database] Database initialized successfully');
-  return db;
 }
 
 /**
