@@ -1,0 +1,174 @@
+# ============================================================================
+# WhisperCache Kubernetes HPA & PDB
+# ============================================================================
+# Horizontal Pod Autoscaler and Pod Disruption Budget for production stability
+
+---
+# ==========================================================================
+# HPA for Backend - Scale based on CPU and Memory
+# ==========================================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: whispercache-backend-hpa
+  namespace: whispercache
+  labels:
+    app.kubernetes.io/name: whispercache
+    app.kubernetes.io/component: backend
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: whispercache-backend
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    # Scale on CPU utilization
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    
+    # Scale on Memory utilization
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  
+  behavior:
+    # Scale up quickly for traffic spikes
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 60
+        - type: Pods
+          value: 4
+          periodSeconds: 60
+      selectPolicy: Max
+    
+    # Scale down slowly to avoid thrashing
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 25
+          periodSeconds: 120
+        - type: Pods
+          value: 1
+          periodSeconds: 120
+      selectPolicy: Min
+
+---
+# ==========================================================================
+# HPA for Frontend - Scale based on CPU
+# ==========================================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: whispercache-frontend-hpa
+  namespace: whispercache
+  labels:
+    app.kubernetes.io/name: whispercache
+    app.kubernetes.io/component: frontend
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: whispercache-frontend
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+  
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 60
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 25
+          periodSeconds: 120
+      selectPolicy: Min
+
+---
+# ==========================================================================
+# PDB for Backend - Ensure minimum availability
+# ==========================================================================
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: whispercache-backend-pdb
+  namespace: whispercache
+  labels:
+    app.kubernetes.io/name: whispercache
+    app.kubernetes.io/component: backend
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: whispercache
+      app.kubernetes.io/component: backend
+
+---
+# ==========================================================================
+# PDB for Frontend - Ensure minimum availability
+# ==========================================================================
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: whispercache-frontend-pdb
+  namespace: whispercache
+  labels:
+    app.kubernetes.io/name: whispercache
+    app.kubernetes.io/component: frontend
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: whispercache
+      app.kubernetes.io/component: frontend
+
+---
+# ==========================================================================
+# Vertical Pod Autoscaler (VPA) for Backend - Optional
+# ==========================================================================
+# Requires VPA to be installed in the cluster
+# apiVersion: autoscaling.k8s.io/v1
+# kind: VerticalPodAutoscaler
+# metadata:
+#   name: whispercache-backend-vpa
+#   namespace: whispercache
+# spec:
+#   targetRef:
+#     apiVersion: apps/v1
+#     kind: Deployment
+#     name: whispercache-backend
+#   updatePolicy:
+#     updateMode: "Auto"
+#   resourcePolicy:
+#     containerPolicies:
+#       - containerName: backend
+#         minAllowed:
+#           cpu: "100m"
+#           memory: "256Mi"
+#         maxAllowed:
+#           cpu: "2"
+#           memory: "2Gi"
+#         controlledResources: ["cpu", "memory"]

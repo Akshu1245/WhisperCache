@@ -1,0 +1,315 @@
+# ============================================================================
+# WhisperCache Prometheus Alert Rules
+# ============================================================================
+# Critical alerts for monitoring application health and performance
+
+groups:
+  # ==========================================================================
+  # Application Health Alerts
+  # ==========================================================================
+  - name: whispercache-health
+    interval: 30s
+    rules:
+      # Service Down
+      - alert: WhisperCacheBackendDown
+        expr: up{job="whispercache-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: backend
+        annotations:
+          summary: "WhisperCache backend is down"
+          description: "The WhisperCache backend service has been down for more than 1 minute."
+          runbook_url: "https://docs.whispercache.io/runbooks/backend-down"
+
+      # Health Check Failures
+      - alert: WhisperCacheHealthCheckFailing
+        expr: |
+          rate(http_request_duration_seconds_count{path="/api/health",status!~"2.."}[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: "Health check failures detected"
+          description: "WhisperCache health check is returning non-2xx status codes."
+
+  # ==========================================================================
+  # Error Rate Alerts
+  # ==========================================================================
+  - name: whispercache-errors
+    interval: 30s
+    rules:
+      # High Error Rate (5xx)
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(http_request_duration_seconds_count{status=~"5.."}[5m]))
+            /
+            sum(rate(http_request_duration_seconds_count[5m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: backend
+        annotations:
+          summary: "High error rate detected (> 5%)"
+          description: "Error rate is {{ $value | humanizePercentage }} over the last 5 minutes."
+          runbook_url: "https://docs.whispercache.io/runbooks/high-error-rate"
+
+      # Client Error Rate (4xx)
+      - alert: HighClientErrorRate
+        expr: |
+          (
+            sum(rate(http_request_duration_seconds_count{status=~"4.."}[5m]))
+            /
+            sum(rate(http_request_duration_seconds_count[5m]))
+          ) > 0.20
+        for: 10m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: "High client error rate detected (> 20%)"
+          description: "Client error rate is {{ $value | humanizePercentage }} over the last 5 minutes."
+
+      # ZK Proof Generation Errors
+      - alert: ZKProofGenerationErrors
+        expr: |
+          rate(zk_proof_errors_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: zk-prover
+        annotations:
+          summary: "ZK proof generation errors detected"
+          description: "ZK proof generation is failing at {{ $value }} errors per second."
+
+  # ==========================================================================
+  # Latency Alerts
+  # ==========================================================================
+  - name: whispercache-latency
+    interval: 30s
+    rules:
+      # High API Latency (p95)
+      - alert: HighAPILatency
+        expr: |
+          histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, path))
+          > 2
+        for: 5m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: "High API latency detected (p95 > 2s)"
+          description: "95th percentile latency for {{ $labels.path }} is {{ $value }}s."
+
+      # Very High API Latency (p99)
+      - alert: VeryHighAPILatency
+        expr: |
+          histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))
+          > 5
+        for: 5m
+        labels:
+          severity: critical
+          service: backend
+        annotations:
+          summary: "Very high API latency detected (p99 > 5s)"
+          description: "99th percentile latency is {{ $value }}s. Immediate investigation required."
+          runbook_url: "https://docs.whispercache.io/runbooks/high-latency"
+
+      # ZK Proof Generation Latency
+      - alert: SlowZKProofGeneration
+        expr: |
+          histogram_quantile(0.95, sum(rate(zk_proof_duration_seconds_bucket[5m])) by (le))
+          > 30
+        for: 5m
+        labels:
+          severity: warning
+          service: zk-prover
+        annotations:
+          summary: "Slow ZK proof generation (p95 > 30s)"
+          description: "ZK proof generation 95th percentile is {{ $value }}s."
+
+  # ==========================================================================
+  # Resource Utilization Alerts
+  # ==========================================================================
+  - name: whispercache-resources
+    interval: 30s
+    rules:
+      # High CPU Usage
+      - alert: HighCPUUsage
+        expr: |
+          (
+            sum(rate(process_cpu_seconds_total{job="whispercache-backend"}[5m])) * 100
+          ) > 80
+        for: 10m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: "High CPU usage detected (> 80%)"
+          description: "CPU usage is {{ $value }}% over the last 10 minutes."
+
+      # Critical CPU Usage
+      - alert: CriticalCPUUsage
+        expr: |
+          (
+            sum(rate(process_cpu_seconds_total{job="whispercache-backend"}[5m])) * 100
+          ) > 95
+        for: 5m
+        labels:
+          severity: critical
+          service: backend
+        annotations:
+          summary: "Critical CPU usage (> 95%)"
+          description: "CPU usage is {{ $value }}%. Service may become unresponsive."
+          runbook_url: "https://docs.whispercache.io/runbooks/high-cpu"
+
+      # High Memory Usage
+      - alert: HighMemoryUsage
+        expr: |
+          (
+            process_resident_memory_bytes{job="whispercache-backend"}
+            /
+            (512 * 1024 * 1024)
+          ) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: "High memory usage detected (> 85%)"
+          description: "Memory usage is {{ $value | humanizePercentage }}."
+
+      # Critical Memory Usage
+      - alert: CriticalMemoryUsage
+        expr: |
+          (
+            process_resident_memory_bytes{job="whispercache-backend"}
+            /
+            (512 * 1024 * 1024)
+          ) > 0.95
+        for: 5m
+        labels:
+          severity: critical
+          service: backend
+        annotations:
+          summary: "Critical memory usage (> 95%)"
+          description: "Memory usage is {{ $value | humanizePercentage }}. OOM likely imminent."
+          runbook_url: "https://docs.whispercache.io/runbooks/high-memory"
+
+      # Event Loop Lag (Node.js specific)
+      - alert: HighEventLoopLag
+        expr: |
+          nodejs_eventloop_lag_seconds > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: "High Node.js event loop lag (> 500ms)"
+          description: "Event loop lag is {{ $value }}s. Application may be blocking."
+
+  # ==========================================================================
+  # Database & Storage Alerts
+  # ==========================================================================
+  - name: whispercache-storage
+    interval: 60s
+    rules:
+      # SQLite Database Size
+      - alert: DatabaseSizeWarning
+        expr: |
+          whispercache_database_size_bytes > (1 * 1024 * 1024 * 1024)
+        for: 1h
+        labels:
+          severity: warning
+          service: database
+        annotations:
+          summary: "Database size exceeds 1GB"
+          description: "SQLite database is {{ $value | humanize1024 }}. Consider archiving old data."
+
+      # Disk Space
+      - alert: LowDiskSpace
+        expr: |
+          (node_filesystem_avail_bytes{mountpoint="/app/data"} / node_filesystem_size_bytes{mountpoint="/app/data"}) < 0.15
+        for: 10m
+        labels:
+          severity: warning
+          service: infrastructure
+        annotations:
+          summary: "Low disk space (< 15% available)"
+          description: "Disk space is {{ $value | humanizePercentage }} available."
+
+  # ==========================================================================
+  # Security Alerts
+  # ==========================================================================
+  - name: whispercache-security
+    interval: 30s
+    rules:
+      # Rate Limiting Triggered
+      - alert: HighRateLimitingActivity
+        expr: |
+          sum(rate(rate_limit_exceeded_total[5m])) > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: security
+        annotations:
+          summary: "High rate limiting activity"
+          description: "{{ $value }} rate limit violations per second. Possible abuse or attack."
+
+      # Authentication Failures
+      - alert: HighAuthenticationFailures
+        expr: |
+          sum(rate(auth_failures_total[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: security
+        annotations:
+          summary: "High authentication failure rate"
+          description: "{{ $value }} auth failures per second. Possible brute force attempt."
+
+      # IP Blocking Events
+      - alert: IPBlockingEvents
+        expr: |
+          sum(rate(ip_blocked_total[5m])) > 1
+        for: 2m
+        labels:
+          severity: info
+          service: security
+        annotations:
+          summary: "IPs being blocked"
+          description: "{{ $value }} IPs blocked per second due to security policies."
+
+  # ==========================================================================
+  # Business Metrics Alerts
+  # ==========================================================================
+  - name: whispercache-business
+    interval: 60s
+    rules:
+      # Low Request Volume (possible outage indicator)
+      - alert: LowRequestVolume
+        expr: |
+          sum(rate(http_request_duration_seconds_count[5m])) < 0.1
+        for: 15m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: "Unusually low request volume"
+          description: "Request rate is {{ $value }} req/s. This may indicate a routing issue or outage."
+
+      # Memory Store Operations Slow
+      - alert: SlowMemoryOperations
+        expr: |
+          histogram_quantile(0.95, sum(rate(memory_operation_duration_seconds_bucket[5m])) by (le, operation))
+          > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: "Slow memory operations (p95 > 1s)"
+          description: "{{ $labels.operation }} operations are taking {{ $value }}s at p95."

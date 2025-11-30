@@ -1,0 +1,354 @@
+# ============================================================================
+# WhisperCache - Database Backup CronJob
+# ============================================================================
+# Automated PostgreSQL backup using pg_dump
+#
+# Apply with:
+#   kubectl apply -f k8s/db-backup-cronjob.yaml
+#
+# Features:
+#   - Scheduled backups (default: daily at 2am)
+#   - Configurable retention (7 days default)
+#   - Uploads to S3-compatible storage (optional)
+#   - Compression with gzip
+#   - Slack/webhook notifications on failure
+# ============================================================================
+
+---
+# ============================================================================
+# ConfigMap: Backup Scripts
+# ============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backup-scripts
+  namespace: whispercache
+  labels:
+    app: whispercache
+    component: backup
+data:
+  backup.sh: |
+    #!/bin/bash
+    set -euo pipefail
+
+    # ========================================================================
+    # Configuration
+    # ========================================================================
+    BACKUP_DIR="/backups"
+    TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+    BACKUP_NAME="whispercache_${TIMESTAMP}"
+    RETENTION_DAYS=${RETENTION_DAYS:-7}
+    
+    # PostgreSQL connection (from environment)
+    PGHOST=${POSTGRES_HOST:-postgres}
+    PGPORT=${POSTGRES_PORT:-5432}
+    PGDATABASE=${POSTGRES_DB:-whispercache}
+    PGUSER=${POSTGRES_USER:-whispercache}
+    export PGPASSWORD=${POSTGRES_PASSWORD}
+
+    echo "=== WhisperCache Database Backup ==="
+    echo "Timestamp: ${TIMESTAMP}"
+    echo "Database: ${PGDATABASE}@${PGHOST}:${PGPORT}"
+
+    # ========================================================================
+    # Create Backup
+    # ========================================================================
+    echo "Creating backup..."
+    mkdir -p "${BACKUP_DIR}"
+    
+    # Create SQL dump with compression
+    pg_dump \
+      --host="${PGHOST}" \
+      --port="${PGPORT}" \
+      --username="${PGUSER}" \
+      --dbname="${PGDATABASE}" \
+      --format=custom \
+      --compress=9 \
+      --file="${BACKUP_DIR}/${BACKUP_NAME}.dump"
+    
+    # Calculate checksum
+    sha256sum "${BACKUP_DIR}/${BACKUP_NAME}.dump" > "${BACKUP_DIR}/${BACKUP_NAME}.sha256"
+    
+    BACKUP_SIZE=$(du -h "${BACKUP_DIR}/${BACKUP_NAME}.dump" | cut -f1)
+    echo "Backup created: ${BACKUP_NAME}.dump (${BACKUP_SIZE})"
+
+    # ========================================================================
+    # Upload to S3 (if configured)
+    # ========================================================================
+    if [ -n "${S3_BUCKET:-}" ]; then
+      echo "Uploading to S3: s3://${S3_BUCKET}/${S3_PREFIX:-backups}/"
+      
+      aws s3 cp \
+        "${BACKUP_DIR}/${BACKUP_NAME}.dump" \
+        "s3://${S3_BUCKET}/${S3_PREFIX:-backups}/${BACKUP_NAME}.dump" \
+        --storage-class "${S3_STORAGE_CLASS:-STANDARD_IA}"
+      
+      aws s3 cp \
+        "${BACKUP_DIR}/${BACKUP_NAME}.sha256" \
+        "s3://${S3_BUCKET}/${S3_PREFIX:-backups}/${BACKUP_NAME}.sha256"
+      
+      echo "S3 upload complete"
+    fi
+
+    # ========================================================================
+    # Cleanup Old Backups (local)
+    # ========================================================================
+    echo "Cleaning up backups older than ${RETENTION_DAYS} days..."
+    find "${BACKUP_DIR}" -name "whispercache_*.dump" -mtime +${RETENTION_DAYS} -delete
+    find "${BACKUP_DIR}" -name "whispercache_*.sha256" -mtime +${RETENTION_DAYS} -delete
+
+    # ========================================================================
+    # Cleanup Old Backups (S3)
+    # ========================================================================
+    if [ -n "${S3_BUCKET:-}" ] && [ "${S3_LIFECYCLE_ENABLED:-false}" != "true" ]; then
+      echo "Cleaning up S3 backups older than ${RETENTION_DAYS} days..."
+      CUTOFF_DATE=$(date -d "${RETENTION_DAYS} days ago" +%Y-%m-%d)
+      
+      aws s3 ls "s3://${S3_BUCKET}/${S3_PREFIX:-backups}/" \
+        | awk -v date="${CUTOFF_DATE}" '$1 < date {print $4}' \
+        | while read -r file; do
+            aws s3 rm "s3://${S3_BUCKET}/${S3_PREFIX:-backups}/${file}"
+          done
+    fi
+
+    echo "=== Backup Complete ==="
+    echo "File: ${BACKUP_DIR}/${BACKUP_NAME}.dump"
+    echo "Size: ${BACKUP_SIZE}"
+    
+  restore.sh: |
+    #!/bin/bash
+    set -euo pipefail
+
+    # ========================================================================
+    # Configuration
+    # ========================================================================
+    BACKUP_FILE=${1:-}
+    
+    if [ -z "${BACKUP_FILE}" ]; then
+      echo "Usage: restore.sh <backup_file>"
+      echo "Available backups:"
+      ls -la /backups/*.dump 2>/dev/null || echo "No local backups found"
+      exit 1
+    fi
+
+    PGHOST=${POSTGRES_HOST:-postgres}
+    PGPORT=${POSTGRES_PORT:-5432}
+    PGDATABASE=${POSTGRES_DB:-whispercache}
+    PGUSER=${POSTGRES_USER:-whispercache}
+    export PGPASSWORD=${POSTGRES_PASSWORD}
+
+    echo "=== WhisperCache Database Restore ==="
+    echo "Backup file: ${BACKUP_FILE}"
+    echo "Target: ${PGDATABASE}@${PGHOST}:${PGPORT}"
+    echo ""
+    echo "WARNING: This will overwrite the existing database!"
+    echo "Press Ctrl+C to cancel or wait 10 seconds to continue..."
+    sleep 10
+
+    # ========================================================================
+    # Verify Backup
+    # ========================================================================
+    if [ -f "${BACKUP_FILE}.sha256" ]; then
+      echo "Verifying backup integrity..."
+      sha256sum -c "${BACKUP_FILE}.sha256"
+    fi
+
+    # ========================================================================
+    # Restore
+    # ========================================================================
+    echo "Starting restore..."
+    
+    # Drop and recreate database (requires superuser or owner)
+    psql \
+      --host="${PGHOST}" \
+      --port="${PGPORT}" \
+      --username="${PGUSER}" \
+      --dbname="postgres" \
+      -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='${PGDATABASE}' AND pid <> pg_backend_pid();"
+    
+    # Restore from dump
+    pg_restore \
+      --host="${PGHOST}" \
+      --port="${PGPORT}" \
+      --username="${PGUSER}" \
+      --dbname="${PGDATABASE}" \
+      --clean \
+      --if-exists \
+      --no-owner \
+      --no-privileges \
+      "${BACKUP_FILE}"
+
+    echo "=== Restore Complete ==="
+
+---
+# ============================================================================
+# Secret: Database Credentials and S3 Access
+# ============================================================================
+apiVersion: v1
+kind: Secret
+metadata:
+  name: backup-secrets
+  namespace: whispercache
+  labels:
+    app: whispercache
+    component: backup
+type: Opaque
+stringData:
+  # PostgreSQL credentials (should match your deployment)
+  POSTGRES_PASSWORD: "changeme"
+  
+  # S3 credentials (optional - comment out if not using S3)
+  # AWS_ACCESS_KEY_ID: "your-access-key"
+  # AWS_SECRET_ACCESS_KEY: "your-secret-key"
+  # AWS_DEFAULT_REGION: "us-east-1"
+
+---
+# ============================================================================
+# PersistentVolumeClaim: Backup Storage
+# ============================================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backup-storage
+  namespace: whispercache
+  labels:
+    app: whispercache
+    component: backup
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  # Uncomment and set storage class as needed
+  # storageClassName: standard
+
+---
+# ============================================================================
+# CronJob: Daily Database Backup
+# ============================================================================
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: db-backup
+  namespace: whispercache
+  labels:
+    app: whispercache
+    component: backup
+spec:
+  # Run daily at 2:00 AM UTC
+  schedule: "0 2 * * *"
+  
+  # Keep last 3 successful and 1 failed job for debugging
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  
+  # Don't run if previous job is still running
+  concurrencyPolicy: Forbid
+  
+  # Start job within 60 minutes of scheduled time or skip
+  startingDeadlineSeconds: 3600
+  
+  jobTemplate:
+    spec:
+      # Retry 2 times on failure
+      backoffLimit: 2
+      
+      # Timeout after 1 hour
+      activeDeadlineSeconds: 3600
+      
+      template:
+        metadata:
+          labels:
+            app: whispercache
+            component: backup
+        spec:
+          restartPolicy: OnFailure
+          
+          containers:
+            - name: backup
+              image: postgres:15-alpine
+              
+              command: ["/bin/bash", "/scripts/backup.sh"]
+              
+              env:
+                - name: POSTGRES_HOST
+                  value: "postgres"
+                - name: POSTGRES_PORT
+                  value: "5432"
+                - name: POSTGRES_DB
+                  value: "whispercache"
+                - name: POSTGRES_USER
+                  value: "whispercache"
+                - name: RETENTION_DAYS
+                  value: "7"
+                # Uncomment for S3 uploads
+                # - name: S3_BUCKET
+                #   value: "your-backup-bucket"
+                # - name: S3_PREFIX
+                #   value: "whispercache/backups"
+              
+              envFrom:
+                - secretRef:
+                    name: backup-secrets
+              
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                - name: backups
+                  mountPath: /backups
+              
+              resources:
+                requests:
+                  cpu: "100m"
+                  memory: "256Mi"
+                limits:
+                  cpu: "500m"
+                  memory: "512Mi"
+
+          volumes:
+            - name: scripts
+              configMap:
+                name: backup-scripts
+                defaultMode: 0755
+            - name: backups
+              persistentVolumeClaim:
+                claimName: backup-storage
+
+---
+# ============================================================================
+# Job: Manual Backup (template for ad-hoc backups)
+# ============================================================================
+# To run a manual backup:
+#   kubectl create job --from=cronjob/db-backup manual-backup-$(date +%Y%m%d-%H%M%S) -n whispercache
+#
+# Or apply this job directly:
+# apiVersion: batch/v1
+# kind: Job
+# metadata:
+#   name: manual-backup
+#   namespace: whispercache
+# spec:
+#   template:
+#     spec:
+#       restartPolicy: Never
+#       containers:
+#         - name: backup
+#           image: postgres:15-alpine
+#           command: ["/bin/bash", "/scripts/backup.sh"]
+#           envFrom:
+#             - secretRef:
+#                 name: backup-secrets
+#           volumeMounts:
+#             - name: scripts
+#               mountPath: /scripts
+#             - name: backups
+#               mountPath: /backups
+#       volumes:
+#         - name: scripts
+#           configMap:
+#             name: backup-scripts
+#             defaultMode: 0755
+#         - name: backups
+#           persistentVolumeClaim:
+#             claimName: backup-storage

@@ -1,0 +1,24 @@
+{
+  "name": "whispercache-zk",
+  "version": "1.0.0",
+  "description": "Zero-knowledge circuits for WhisperCache",
+  "scripts": {
+    "setup": "node scripts/setup.js",
+    "compile": "node scripts/compile.js",
+    "build": "npm run compile && npm run setup",
+    "build:zk": "node scripts/build_memory_pattern.js",
+    "build:zk:v2": "node scripts/build_memory_pattern_v2.js",
+    "build:all": "npm run build:zk && npm run build:zk:v2",
+    "prove:example": "node scripts/prove_example.js",
+    "clean": "rimraf build artifacts",
+    "test": "node scripts/test.js"
+  },
+  "dependencies": {
+    "circomlib": "^2.0.5",
+    "circomlibjs": "^0.1.7",
+    "snarkjs": "^0.7.4"
+  },
+  "devDependencies": {
+    "rimraf": "^5.0.5"
+  }
+}

@@ -1,0 +1,153 @@
+# ============================================================================
+# WhisperCache Kubernetes Deployment
+# ============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: whispercache
+  namespace: whispercache
+  labels:
+    app: whispercache
+    version: v1
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: whispercache
+  template:
+    metadata:
+      labels:
+        app: whispercache
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "4000"
+        prometheus.io/path: "/api/metrics/prometheus"
+    spec:
+      serviceAccountName: whispercache
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      containers:
+        - name: whispercache
+          image: whispercache/server:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 4000
+              name: http
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: PORT
+              value: "4000"
+            - name: LOG_LEVEL
+              value: "info"
+            - name: BLOCKCHAIN_MODE
+              valueFrom:
+                configMapKeyRef:
+                  name: whispercache-config
+                  key: blockchain-mode
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 4000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 4000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+            - name: zk-circuits
+              mountPath: /app/zk/circuits
+              readOnly: true
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: whispercache-data
+        - name: zk-circuits
+          configMap:
+            name: whispercache-circuits
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: whispercache
+  namespace: whispercache
+  labels:
+    app: whispercache
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 4000
+      protocol: TCP
+      name: http
+  selector:
+    app: whispercache
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: whispercache-config
+  namespace: whispercache
+data:
+  blockchain-mode: "simulation"
+  log-level: "info"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: whispercache-data
+  namespace: whispercache
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: standard
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: whispercache
+  namespace: whispercache
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: whispercache
+  namespace: whispercache
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  tls:
+    - hosts:
+        - api.whispercache.example.com
+      secretName: whispercache-tls
+  rules:
+    - host: api.whispercache.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: whispercache
+                port:
+                  number: 80

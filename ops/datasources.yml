@@ -1,0 +1,121 @@
+# ============================================================================
+# Grafana Datasources Configuration
+# ============================================================================
+# Auto-provisioned datasources for WhisperCache monitoring
+
+apiVersion: 1
+
+# List of datasources to insert/update/delete
+deleteDatasources: []
+
+datasources:
+  # ==========================================================================
+  # Prometheus - Primary Metrics Store
+  # ==========================================================================
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    uid: prometheus
+    version: 1
+    jsonData:
+      timeInterval: "15s"
+      httpMethod: POST
+      manageAlerts: true
+      prometheusType: Prometheus
+      prometheusVersion: "2.47.0"
+      cacheLevel: "Low"
+      disableRecordingRules: false
+      incrementalQueryOverlapWindow: "10m"
+
+  # ==========================================================================
+  # Prometheus (Docker Compose) - Alternative endpoint
+  # ==========================================================================
+  - name: Prometheus-Docker
+    type: prometheus
+    access: proxy
+    url: http://host.docker.internal:9091
+    isDefault: false
+    editable: false
+    uid: prometheus-docker
+    version: 1
+    jsonData:
+      timeInterval: "15s"
+      httpMethod: POST
+
+  # ==========================================================================
+  # Loki - Log Aggregation
+  # ==========================================================================
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    isDefault: false
+    editable: false
+    uid: loki
+    version: 1
+    jsonData:
+      maxLines: 1000
+      # Link logs to traces when Tempo is enabled
+      # derivedFields:
+      #   - name: TraceID
+      #     matcherRegex: "traceId=(\\w+)"
+      #     url: "http://tempo:3200/trace/$${__value.raw}"
+      #     datasourceUid: tempo
+
+  # ==========================================================================
+  # Tempo - Distributed Tracing (Optional)
+  # ==========================================================================
+  # - name: Tempo
+  #   type: tempo
+  #   access: proxy
+  #   url: http://tempo:3200
+  #   isDefault: false
+  #   editable: false
+  #   uid: tempo
+  #   version: 1
+  #   jsonData:
+  #     httpMethod: GET
+  #     serviceMap:
+  #       datasourceUid: prometheus
+  #     nodeGraph:
+  #       enabled: true
+  #     lokiSearch:
+  #       datasourceUid: loki
+
+  # ==========================================================================
+  # Alertmanager - Alert Management
+  # ==========================================================================
+  - name: Alertmanager
+    type: alertmanager
+    access: proxy
+    url: http://alertmanager:9093
+    isDefault: false
+    editable: false
+    uid: alertmanager
+    version: 1
+    jsonData:
+      implementation: prometheus
+
+  # ==========================================================================
+  # PostgreSQL - Application Database (Optional)
+  # ==========================================================================
+  # - name: PostgreSQL
+  #   type: postgres
+  #   access: proxy
+  #   url: postgres:5432
+  #   isDefault: false
+  #   editable: false
+  #   uid: postgres
+  #   version: 1
+  #   database: whispercache
+  #   user: whispercache
+  #   secureJsonData:
+  #     password: "${POSTGRES_PASSWORD}"
+  #   jsonData:
+  #     sslmode: disable
+  #     maxOpenConns: 10
+  #     maxIdleConns: 5
+  #     connMaxLifetime: 14400

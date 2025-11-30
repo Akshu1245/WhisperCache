@@ -1,0 +1,325 @@
+# ============================================================================
+# WhisperCache Kubernetes Deployment
+# ============================================================================
+# Backend and Frontend deployments with production-ready configurations
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: whispercache
+  labels:
+    app.kubernetes.io/name: whispercache
+    app.kubernetes.io/managed-by: kubectl
+
+---
+# ==========================================================================
+# ConfigMap - Application Configuration
+# ==========================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: whispercache-config
+  namespace: whispercache
+  labels:
+    app.kubernetes.io/name: whispercache
+data:
+  NODE_ENV: "production"
+  PORT: "4000"
+  DATABASE_TYPE: "sqlite"
+  DATABASE_PATH: "/app/data/whispercache.db"
+  BLOCKCHAIN_MODE: "simulation"
+  LOG_LEVEL: "info"
+  METRICS_ENABLED: "true"
+  CORS_ORIGINS: "http://localhost:3000,https://whispercache.example.com"
+
+---
+# ==========================================================================
+# Secret - Sensitive Configuration
+# ==========================================================================
+apiVersion: v1
+kind: Secret
+metadata:
+  name: whispercache-secrets
+  namespace: whispercache
+  labels:
+    app.kubernetes.io/name: whispercache
+type: Opaque
+stringData:
+  # Replace with actual secrets in production
+  MIDNIGHT_API_KEY: "your-midnight-api-key"
+  ENCRYPTION_KEY: "your-32-byte-encryption-key-here"
+  JWT_SECRET: "your-jwt-secret-key"
+
+---
+# ==========================================================================
+# Backend Deployment
+# ==========================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: whispercache-backend
+  namespace: whispercache
+  labels:
+    app.kubernetes.io/name: whispercache
+    app.kubernetes.io/component: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: whispercache
+      app.kubernetes.io/component: backend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: whispercache
+        app.kubernetes.io/component: backend
+        app: whispercache-backend
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+        loki.io/scrape: "true"
+    spec:
+      serviceAccountName: whispercache-backend
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      
+      containers:
+        - name: backend
+          image: whispercache/backend:latest
+          imagePullPolicy: Always
+          
+          ports:
+            - name: http
+              containerPort: 4000
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          
+          envFrom:
+            - configMapRef:
+                name: whispercache-config
+            - secretRef:
+                name: whispercache-secrets
+          
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 30
+          
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+            - name: zk-circuits
+              mountPath: /app/zk/circuits
+              readOnly: true
+          
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+      
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: whispercache-backend-data
+        - name: zk-circuits
+          configMap:
+            name: whispercache-zk-circuits
+            optional: true
+      
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: whispercache
+                    app.kubernetes.io/component: backend
+                topologyKey: kubernetes.io/hostname
+      
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: whispercache
+              app.kubernetes.io/component: backend
+
+---
+# ==========================================================================
+# Frontend Deployment
+# ==========================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: whispercache-frontend
+  namespace: whispercache
+  labels:
+    app.kubernetes.io/name: whispercache
+    app.kubernetes.io/component: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: whispercache
+      app.kubernetes.io/component: frontend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: whispercache
+        app.kubernetes.io/component: frontend
+        app: whispercache-frontend
+      annotations:
+        loki.io/scrape: "true"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      
+      containers:
+        - name: frontend
+          image: whispercache/frontend:latest
+          imagePullPolicy: Always
+          
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+          
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          
+          volumeMounts:
+            - name: nginx-cache
+              mountPath: /var/cache/nginx
+            - name: nginx-run
+              mountPath: /var/run
+      
+      volumes:
+        - name: nginx-cache
+          emptyDir: {}
+        - name: nginx-run
+          emptyDir: {}
+      
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: whispercache
+                    app.kubernetes.io/component: frontend
+                topologyKey: kubernetes.io/hostname
+
+---
+# ==========================================================================
+# Backend ServiceAccount
+# ==========================================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: whispercache-backend
+  namespace: whispercache
+  labels:
+    app.kubernetes.io/name: whispercache
+    app.kubernetes.io/component: backend
+
+---
+# ==========================================================================
+# PersistentVolumeClaim for Backend Data
+# ==========================================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: whispercache-backend-data
+  namespace: whispercache
+  labels:
+    app.kubernetes.io/name: whispercache
+    app.kubernetes.io/component: backend
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard

@@ -1,0 +1,54 @@
+# ============================================================================
+# WhisperCache Development Docker Compose
+# ============================================================================
+# Hot-reload enabled for development
+
+version: '3.8'
+
+services:
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+      target: development
+    container_name: whispercache-server-dev
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=development
+      - PORT=4000
+      - LOG_LEVEL=debug
+      - BLOCKCHAIN_MODE=simulation
+    volumes:
+      - ./server/src:/app/src:ro
+      - ./server/package.json:/app/package.json:ro
+      - ./server/tsconfig.json:/app/tsconfig.json:ro
+      - server-dev-data:/app/data
+    networks:
+      - whispercache-dev
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile.dev
+    container_name: whispercache-client-dev
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:4000
+    volumes:
+      - ./client/src:/app/src:ro
+      - ./client/index.html:/app/index.html:ro
+      - ./client/package.json:/app/package.json:ro
+      - ./client/vite.config.ts:/app/vite.config.ts:ro
+    depends_on:
+      - server
+    networks:
+      - whispercache-dev
+
+volumes:
+  server-dev-data:
+
+networks:
+  whispercache-dev:
+    driver: bridge

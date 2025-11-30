@@ -1,0 +1,4 @@
+Policy,AvgProvingTime(ms),MinTime(ms),MaxTime(ms),StdDev(ms),AvgVerifyTime(ms),ProofSize(B),Runs
+memory_pattern,2427,2031,3000,415,143,172,15
+policy_enforcement,1820,1523,2250,311,115,172,15
+proof_of_knowledge,1214,1016,1500,207,144,172,15

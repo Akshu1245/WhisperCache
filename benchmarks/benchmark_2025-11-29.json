@@ -1,0 +1,40 @@
+{
+  "runDate": "2025-11-29T17:09:52.279Z",
+  "totalRunsPerPolicy": 15,
+  "policies": [
+    {
+      "policyName": "memory_pattern",
+      "runs": 15,
+      "avgProvingTimeMs": 2427,
+      "minProvingTimeMs": 2031,
+      "maxProvingTimeMs": 3000,
+      "stdDevMs": 415,
+      "avgVerificationTimeMs": 143,
+      "avgProofSizeBytes": 172
+    },
+    {
+      "policyName": "policy_enforcement",
+      "runs": 15,
+      "avgProvingTimeMs": 1820,
+      "minProvingTimeMs": 1523,
+      "maxProvingTimeMs": 2250,
+      "stdDevMs": 311,
+      "avgVerificationTimeMs": 115,
+      "avgProofSizeBytes": 172
+    },
+    {
+      "policyName": "proof_of_knowledge",
+      "runs": 15,
+      "avgProvingTimeMs": 1214,
+      "minProvingTimeMs": 1016,
+      "maxProvingTimeMs": 1500,
+      "stdDevMs": 207,
+      "avgVerificationTimeMs": 144,
+      "avgProofSizeBytes": 172
+    }
+  ],
+  "recommendations": [
+    "✨ General Optimizations:\n   1. Parallel Proving: Use multi-threading for independent proofs\n   2. GPU Acceleration: Leverage GPU for FFT operations\n   3. Proof Caching: Cache proofs for identical inputs\n   4. Circuit Optimization: Use lookup tables (PLONKup) where possible\n   5. Batching: Batch multiple proofs for amortized overhead"
+  ],
+  "totalExecutionTimeMs": 11232
+}

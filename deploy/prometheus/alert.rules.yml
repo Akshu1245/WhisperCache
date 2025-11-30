@@ -1,0 +1,56 @@
+# ============================================================================
+# WhisperCache Prometheus Alert Rules
+# ============================================================================
+
+groups:
+  - name: whispercache
+    rules:
+      # High Error Rate Alert
+      - alert: HighErrorRate
+        expr: rate(whispercache_requests_error[5m]) / rate(whispercache_requests_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is above 10% for the last 5 minutes"
+
+      # High Memory Usage
+      - alert: HighMemoryUsage
+        expr: whispercache_memory_heap_used_mb / whispercache_memory_heap_total_mb > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is above 90%"
+
+      # Server Down
+      - alert: ServerDown
+        expr: up{job="whispercache"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "WhisperCache server is down"
+          description: "The WhisperCache server has been down for more than 1 minute"
+
+      # Slow Proof Generation
+      - alert: SlowProofGeneration
+        expr: avg(whispercache_proof_generation_ms{quantile="0.95"}) > 5000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow proof generation"
+          description: "P95 proof generation time is above 5 seconds"
+
+      # Low Cache Hit Rate
+      - alert: LowCacheHitRate
+        expr: whispercache_proof_cache_hit_rate < 0.5
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: "Low cache hit rate"
+          description: "Proof cache hit rate is below 50%"

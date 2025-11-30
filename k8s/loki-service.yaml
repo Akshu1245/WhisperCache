@@ -1,0 +1,99 @@
+# ============================================================================
+# WhisperCache - Loki Service
+# ============================================================================
+# Exposes Loki for log ingestion and queries
+#
+# Apply with:
+#   kubectl apply -f k8s/loki-service.yaml
+# ============================================================================
+
+---
+# ============================================================================
+# Service: Loki (for internal access)
+# ============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: loki
+  namespace: whispercache
+  labels:
+    app: loki
+    component: logging
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 3100
+      targetPort: http
+      protocol: TCP
+    - name: grpc
+      port: 9096
+      targetPort: grpc
+      protocol: TCP
+  selector:
+    app: loki
+
+---
+# ============================================================================
+# Service: Promtail Metrics (for Prometheus scraping)
+# ============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: promtail
+  namespace: whispercache
+  labels:
+    app: promtail
+    component: logging
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9080"
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless service for DaemonSet
+  ports:
+    - name: http
+      port: 9080
+      targetPort: http
+      protocol: TCP
+  selector:
+    app: promtail
+
+---
+# ============================================================================
+# Ingress: Loki (Optional - for external access)
+# ============================================================================
+# Uncomment to expose Loki externally (for cross-cluster log shipping)
+# WARNING: Ensure proper authentication before exposing
+
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: loki-ingress
+#   namespace: whispercache
+#   labels:
+#     app: loki
+#     component: logging
+#   annotations:
+#     kubernetes.io/ingress.class: nginx
+#     # Basic auth for security
+#     nginx.ingress.kubernetes.io/auth-type: basic
+#     nginx.ingress.kubernetes.io/auth-secret: loki-basic-auth
+#     nginx.ingress.kubernetes.io/auth-realm: "Loki Authentication Required"
+# spec:
+#   rules:
+#     - host: loki.whispercache.local
+#       http:
+#         paths:
+#           - path: /
+#             pathType: Prefix
+#             backend:
+#               service:
+#                 name: loki
+#                 port:
+#                   number: 3100
+#   # TLS configuration
+#   # tls:
+#   #   - hosts:
+#   #       - loki.whispercache.local
+#   #     secretName: loki-tls

@@ -1,0 +1,30 @@
+# ============================================================================
+# WhisperCache Prometheus Configuration
+# ============================================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'whispercache'
+
+scrape_configs:
+  # WhisperCache Server Metrics
+  - job_name: 'whispercache'
+    static_configs:
+      - targets: ['whispercache-server:4000']
+    metrics_path: '/api/metrics/prometheus'
+    scrape_interval: 10s
+
+  # Prometheus Self-Monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+rule_files:
+  - 'alert.rules.yml'
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []

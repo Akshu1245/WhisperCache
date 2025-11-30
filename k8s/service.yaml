@@ -1,0 +1,211 @@
+# ============================================================================
+# WhisperCache Kubernetes Services
+# ============================================================================
+# ClusterIP services for internal communication and LoadBalancer/Ingress for external
+
+---
+# ==========================================================================
+# Backend Service (ClusterIP - Internal)
+# ==========================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: whispercache-backend
+  namespace: whispercache
+  labels:
+    app.kubernetes.io/name: whispercache
+    app.kubernetes.io/component: backend
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: whispercache
+    app.kubernetes.io/component: backend
+  ports:
+    - name: http
+      port: 4000
+      targetPort: http
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: metrics
+      protocol: TCP
+
+---
+# ==========================================================================
+# Frontend Service (ClusterIP - Internal)
+# ==========================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: whispercache-frontend
+  namespace: whispercache
+  labels:
+    app.kubernetes.io/name: whispercache
+    app.kubernetes.io/component: frontend
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: whispercache
+    app.kubernetes.io/component: frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+
+---
+# ==========================================================================
+# Backend Metrics Service (for Prometheus ServiceMonitor)
+# ==========================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: whispercache-backend-metrics
+  namespace: whispercache
+  labels:
+    app.kubernetes.io/name: whispercache
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: monitoring
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: whispercache
+    app.kubernetes.io/component: backend
+  ports:
+    - name: metrics
+      port: 9090
+      targetPort: metrics
+      protocol: TCP
+
+---
+# ==========================================================================
+# Ingress (External Access via nginx-ingress or similar)
+# ==========================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: whispercache-ingress
+  namespace: whispercache
+  labels:
+    app.kubernetes.io/name: whispercache
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    # Rate limiting
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+    nginx.ingress.kubernetes.io/limit-connections: "50"
+    # CORS
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - whispercache.example.com
+        - api.whispercache.example.com
+      secretName: whispercache-tls
+  rules:
+    # API Backend
+    - host: api.whispercache.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: whispercache-backend
+                port:
+                  number: 4000
+    
+    # Frontend
+    - host: whispercache.example.com
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: whispercache-backend
+                port:
+                  number: 4000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: whispercache-frontend
+                port:
+                  number: 80
+
+---
+# ==========================================================================
+# NetworkPolicy - Restrict Traffic
+# ==========================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: whispercache-network-policy
+  namespace: whispercache
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: whispercache
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow ingress from ingress controller
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 4000
+    # Allow internal communication within namespace
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: whispercache
+      ports:
+        - protocol: TCP
+          port: 4000
+        - protocol: TCP
+          port: 80
+    # Allow Prometheus scraping
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+      ports:
+        - protocol: TCP
+          port: 9090
+  egress:
+    # Allow DNS
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+    # Allow HTTPS outbound (for blockchain APIs)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+    # Allow internal communication
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: whispercache

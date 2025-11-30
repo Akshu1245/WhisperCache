@@ -1,0 +1,43 @@
+{
+  "name": "whispercache-midnight",
+  "version": "1.0.0",
+  "description": "Midnight Compact contracts for WhisperCache ZK Memory Layer",
+  "author": "WhisperCache Team",
+  "license": "MIT",
+  "midnight": {
+    "network": "devnet",
+    "compiler_version": "0.1.0",
+    "contracts": [
+      {
+        "name": "MemoryPatternVerifier",
+        "file": "whisper_cache.compact",
+        "description": "Verifies patterns in encrypted memories without revealing content"
+      },
+      {
+        "name": "MemoryAnchorProof", 
+        "file": "whisper_cache.compact",
+        "description": "Proves memory was anchored at specific time"
+      },
+      {
+        "name": "ComplianceVerifier",
+        "file": "whisper_cache.compact",
+        "description": "Generates GDPR/CCPA compliance proofs"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "midnight-cli compile whisper_cache.compact",
+    "deploy:devnet": "midnight-cli deploy whisper_cache.compact --network devnet",
+    "verify": "midnight-cli verify --contract whisper_cache",
+    "test": "midnight-cli test whisper_cache.compact"
+  },
+  "keywords": [
+    "midnight",
+    "zero-knowledge",
+    "privacy",
+    "cardano",
+    "compact",
+    "zk-proofs",
+    "ai-memory"
+  ]
+}

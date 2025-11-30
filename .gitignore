@@ -1,0 +1,26 @@
+node_modules/
+dist/
+.env
+.vscode/
+.DS_Store
+npm-debug.log
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+# Database
+*.db
+*.sqlite
+data/
+
+# ZK large build artifacts
+zk/build/*.ptau
+*.sym
+
+# Cache
+.cache/
+.vite/
+
+# Logs
+logs/
+*.log

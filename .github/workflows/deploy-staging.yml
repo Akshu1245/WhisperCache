@@ -1,0 +1,229 @@
+# ============================================================================
+# WhisperCache Staging Deployment
+# ============================================================================
+# Deploy to staging environment after successful CI
+#
+# Triggers:
+#   - Successful CI on develop branch
+#   - Manual dispatch
+#
+# Prerequisites:
+#   - Kubernetes cluster configured
+#   - kubectl access via KUBECONFIG secret
+#   - Container registry access
+# ============================================================================
+
+name: Deploy to Staging
+
+on:
+  workflow_run:
+    workflows: ["CI Pipeline"]
+    types: [completed]
+    branches: [develop]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Docker image tag to deploy'
+        required: false
+        default: 'develop'
+        type: string
+      skip_approval:
+        description: 'Skip manual approval'
+        required: false
+        default: false
+        type: boolean
+
+# Only one deployment at a time
+concurrency:
+  group: staging-deployment
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  NAMESPACE: whispercache-staging
+  CLUSTER_NAME: staging-cluster  # TODO: Set your cluster name
+
+jobs:
+  # ==========================================================================
+  # Job 1: Pre-deployment Checks
+  # ==========================================================================
+  pre-check:
+    name: Pre-deployment Checks
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    
+    outputs:
+      image_tag: ${{ steps.get-tag.outputs.tag }}
+      should_deploy: ${{ steps.check.outputs.deploy }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Determine image tag
+        id: get-tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.image_tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check image exists
+        id: check
+        run: |
+          # TODO: Add registry check
+          echo "deploy=true" >> $GITHUB_OUTPUT
+          echo "Image tag: ${{ steps.get-tag.outputs.tag }}"
+
+  # ==========================================================================
+  # Job 2: Manual Approval (Optional)
+  # ==========================================================================
+  # TODO: Enable environment protection rules in GitHub settings
+  # approval:
+  #   name: Approval
+  #   runs-on: ubuntu-latest
+  #   needs: [pre-check]
+  #   if: ${{ needs.pre-check.outputs.should_deploy == 'true' && github.event.inputs.skip_approval != 'true' }}
+  #   environment: staging
+  #   steps:
+  #     - name: Approved
+  #       run: echo "Deployment approved"
+
+  # ==========================================================================
+  # Job 3: Deploy to Staging
+  # ==========================================================================
+  deploy:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [pre-check]
+    if: ${{ needs.pre-check.outputs.should_deploy == 'true' }}
+    # environment: staging  # TODO: Enable when environment is configured
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # TODO: Configure kubectl
+      # - name: Configure kubectl
+      #   uses: azure/k8s-set-context@v3
+      #   with:
+      #     kubeconfig: ${{ secrets.KUBECONFIG }}
+
+      - name: Create deployment manifest
+        run: |
+          echo "Preparing deployment for tag: ${{ needs.pre-check.outputs.image_tag }}"
+          
+          # TODO: Generate kustomize overlay or update image tags
+          # Example with sed:
+          # sed -i "s|image: .*backend:.*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend:${{ needs.pre-check.outputs.image_tag }}|" k8s/deployment.yaml
+          # sed -i "s|image: .*frontend:.*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend:${{ needs.pre-check.outputs.image_tag }}|" k8s/deployment.yaml
+
+      # TODO: Apply Kubernetes manifests
+      # - name: Deploy to cluster
+      #   run: |
+      #     kubectl apply -f k8s/deployment.yaml -n ${{ env.NAMESPACE }}
+      #     kubectl apply -f k8s/service.yaml -n ${{ env.NAMESPACE }}
+      #     kubectl apply -f k8s/hpa.yaml -n ${{ env.NAMESPACE }}
+
+      # TODO: Wait for rollout
+      # - name: Wait for rollout
+      #   run: |
+      #     kubectl rollout status deployment/whispercache-backend -n ${{ env.NAMESPACE }} --timeout=300s
+      #     kubectl rollout status deployment/whispercache-frontend -n ${{ env.NAMESPACE }} --timeout=300s
+
+      - name: Deployment placeholder
+        run: |
+          echo "=========================================="
+          echo "STAGING DEPLOYMENT PLACEHOLDER"
+          echo "=========================================="
+          echo ""
+          echo "To enable actual deployment:"
+          echo "1. Set up a Kubernetes cluster"
+          echo "2. Add KUBECONFIG secret to GitHub"
+          echo "3. Uncomment kubectl steps above"
+          echo "4. Configure environment protection rules"
+          echo ""
+          echo "Image to deploy: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.pre-check.outputs.image_tag }}"
+          echo "Namespace: ${{ env.NAMESPACE }}"
+
+  # ==========================================================================
+  # Job 4: Post-deployment Validation
+  # ==========================================================================
+  validate:
+    name: Validate Deployment
+    runs-on: ubuntu-latest
+    needs: [deploy]
+    
+    steps:
+      # TODO: Add health checks
+      # - name: Health check
+      #   run: |
+      #     STAGING_URL="${{ secrets.STAGING_URL }}"
+      #     for i in {1..10}; do
+      #       if curl -sf "${STAGING_URL}/api/health"; then
+      #         echo "Health check passed"
+      #         exit 0
+      #       fi
+      #       echo "Attempt $i failed, retrying..."
+      #       sleep 10
+      #     done
+      #     echo "Health check failed"
+      #     exit 1
+
+      # TODO: Run smoke tests
+      # - name: Smoke tests
+      #   run: |
+      #     npm run test:smoke -- --url="${{ secrets.STAGING_URL }}"
+
+      - name: Validation placeholder
+        run: |
+          echo "=========================================="
+          echo "POST-DEPLOYMENT VALIDATION PLACEHOLDER"
+          echo "=========================================="
+          echo ""
+          echo "To enable validation:"
+          echo "1. Add STAGING_URL secret"
+          echo "2. Uncomment health check steps"
+          echo "3. Add smoke test suite"
+
+  # ==========================================================================
+  # Job 5: Notify
+  # ==========================================================================
+  notify:
+    name: Notify
+    runs-on: ubuntu-latest
+    needs: [deploy, validate]
+    if: always()
+    
+    steps:
+      - name: Deployment summary
+        run: |
+          echo "## Staging Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Step | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Deploy | ${{ needs.deploy.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Validate | ${{ needs.validate.result }} |" >> $GITHUB_STEP_SUMMARY
+
+      # TODO: Add Slack notification
+      # - name: Notify Slack
+      #   uses: slackapi/slack-github-action@v1
+      #   with:
+      #     channel-id: ${{ secrets.SLACK_CHANNEL_ID }}
+      #     payload: |
+      #       {
+      #         "text": "Staging deployment ${{ needs.deploy.result }}",
+      #         "blocks": [
+      #           {
+      #             "type": "section",
+      #             "text": {
+      #               "type": "mrkdwn",
+      #               "text": "*WhisperCache Staging Deployment*\n\nStatus: ${{ needs.deploy.result }}\nCommit: `${{ github.sha }}`\nBranch: `${{ github.ref_name }}`"
+      #             }
+      #           }
+      #         ]
+      #       }
+      #   env:
+      #     SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}

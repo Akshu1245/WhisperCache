@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2dd4bf"/>
+      <stop offset="50%" style="stop-color:#6366f1"/>
+      <stop offset="100%" style="stop-color:#8b5cf6"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="180" height="180" rx="40" fill="#08080c"/>
+  
+  <!-- Lock/Brain Icon -->
+  <g transform="translate(40, 30)">
+    <!-- Outer circle -->
+    <circle cx="50" cy="50" r="45" stroke="url(#grad)" stroke-width="4" fill="none"/>
+    
+    <!-- Lock body -->
+    <rect x="28" y="50" width="44" height="35" rx="4" fill="url(#grad)"/>
+    
+    <!-- Lock shackle -->
+    <path d="M38 50V40C38 33.4 43.4 28 50 28C56.6 28 62 33.4 62 40V50" 
+          stroke="url(#grad)" stroke-width="5" fill="none" stroke-linecap="round"/>
+    
+    <!-- Keyhole -->
+    <circle cx="50" cy="63" r="5" fill="#08080c"/>
+    <path d="M50 68V78" stroke="#08080c" stroke-width="4" stroke-linecap="round"/>
+  </g>
+</svg>

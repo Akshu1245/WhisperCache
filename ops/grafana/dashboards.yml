@@ -1,0 +1,30 @@
+# ============================================================================
+# Grafana Dashboard Provisioning Configuration
+# ============================================================================
+# Auto-loads dashboards from the dashboards directory
+
+apiVersion: 1
+
+providers:
+  # WhisperCache Dashboards
+  - name: 'WhisperCache'
+    orgId: 1
+    folder: 'WhisperCache'
+    folderUid: 'whispercache'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false
+
+  # Infrastructure Dashboards (optional second folder)
+  # - name: 'Infrastructure'
+  #   orgId: 1
+  #   folder: 'Infrastructure'
+  #   folderUid: 'infrastructure'
+  #   type: file
+  #   disableDeletion: false
+  #   options:
+  #     path: /var/lib/grafana/dashboards/infra
