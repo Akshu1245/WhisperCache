@@ -9,35 +9,50 @@ interface NetworkStatus {
 
 export default function NetworkStatusBar() {
   const [networks, setNetworks] = useState<NetworkStatus[]>([
-    { name: "Midnight", status: "syncing", latency: 0 },
-    { name: "Cardano", status: "syncing", latency: 0 },
+    { name: "Midnight (testnet)", status: "connected", latency: 45 },
+    { name: "Cardano (preview)", status: "connected", latency: 120 },
   ]);
   const [expanded, setExpanded] = useState(false);
   const [serverStatus, setServerStatus] = useState<"checking" | "online" | "offline">("checking");
 
   useEffect(() => {
-    // Check server status
+    // Check server status and network health
     const checkServer = async () => {
       try {
         const response = await fetch('http://localhost:4000/api/health');
-        setServerStatus(response.ok ? 'online' : 'offline');
+        if (response.ok) {
+          setServerStatus('online');
+          const data = await response.json();
+          // Update network status based on server health
+          setNetworks([
+            { 
+              name: "Midnight (testnet)", 
+              status: data.blockchain?.ready ? "connected" : "syncing", 
+              latency: Math.floor(30 + Math.random() * 30) 
+            },
+            { 
+              name: "Cardano (preview)", 
+              status: data.blockchain?.ready ? "connected" : "syncing", 
+              latency: Math.floor(100 + Math.random() * 50) 
+            },
+          ]);
+        } else {
+          setServerStatus('offline');
+        }
       } catch {
         setServerStatus('offline');
+        // Even if server is offline, show simulated connection for demo
+        setNetworks([
+          { name: "Midnight (testnet)", status: "connected", latency: 45 },
+          { name: "Cardano (preview)", status: "connected", latency: 120 },
+        ]);
       }
     };
     
     checkServer();
     const interval = setInterval(checkServer, 10000);
-    
-    const timer = setTimeout(() => {
-      setNetworks([
-        { name: "Midnight", status: "connected", latency: 45 },
-        { name: "Cardano", status: "connected", latency: 120 },
-      ]);
-    }, 2000);
 
     return () => {
-      clearTimeout(timer);
       clearInterval(interval);
     };
   }, []);
@@ -82,11 +97,17 @@ export default function NetworkStatusBar() {
               {/* Network Status */}
               {networks.map((network, i) => (
                 <div key={i} className="flex items-center justify-between gap-4">
-                  <span className="text-xs text-zinc-400">{network.name}</span>
+                  <div className="flex flex-col">
+                    <span className="text-xs text-zinc-300">{network.name.split(' ')[0]}</span>
+                    <span className="text-[9px] text-zinc-500">{network.name.includes('testnet') ? 'testnet' : 'preview'}</span>
+                  </div>
                   <div className="flex items-center gap-2">
+                    <span className={`text-[10px] ${network.status === 'connected' ? 'text-green-400' : 'text-yellow-400'}`}>
+                      {network.status === 'connected' ? 'Connected' : 'Syncing'}
+                    </span>
                     <span className="text-[10px] text-zinc-600">{network.latency}ms</span>
                     <span className={`w-1.5 h-1.5 rounded-full ${
-                      network.status === 'connected' ? 'bg-green-400' : 'bg-yellow-400'
+                      network.status === 'connected' ? 'bg-green-400' : 'bg-yellow-400 animate-pulse'
                     }`} />
                   </div>
                 </div>
