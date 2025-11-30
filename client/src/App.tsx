@@ -17,6 +17,7 @@ const AdminDashboard = lazy(() => import("./components/AdminDashboard"));
 const ArchitectureFlowSlide = lazy(() => import("./components/ArchitectureFlowSlide"));
 const ContractLogicSlide = lazy(() => import("./components/ContractLogicSlide"));
 const GDPRDeletionDemo = lazy(() => import("./components/GDPRDeletionDemo"));
+const PrivacyInAction = lazy(() => import("./components/PrivacyInAction"));
 
 // Lightweight loading skeleton
 const SectionLoader = () => (
@@ -94,6 +95,15 @@ function App() {
         <section id="solution" className="scroll-mt-20">
           <Suspense fallback={<SectionLoader />}>
             <SolutionSection />
+          </Suspense>
+        </section>
+        
+        <SectionDivider label="See The Difference" />
+        
+        {/* ==================== COMPARISON ==================== */}
+        <section id="comparison" className="scroll-mt-20">
+          <Suspense fallback={<SectionLoader />}>
+            <PrivacyInAction />
           </Suspense>
         </section>
         
