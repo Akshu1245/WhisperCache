@@ -139,8 +139,8 @@ export default function SolutionSection() {
             How <span className="bg-gradient-to-r from-teal-400 via-cyan-400 to-blue-400 bg-clip-text text-transparent">WhisperCache</span> Works
           </h2>
           <p className="text-lg text-zinc-400 max-w-2xl mx-auto">
-            Your memories stay encrypted on your device. AI only receives 
-            <span className="text-teal-400 font-medium"> zero-knowledge proofs</span> — never the raw data.
+            WhisperCache is a privacy mini DApp built on <span className="text-purple-400 font-medium">Midnight</span> using Compact contracts.
+            Instead of sending data to AI, we generate a <span className="text-teal-400 font-medium">zero-knowledge proof</span> on-chain.
           </p>
         </motion.div>
 

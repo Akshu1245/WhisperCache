@@ -15,6 +15,7 @@ import orgRouter from './routes/org'
 import policiesRouter from './routes/policies'
 import gdprRouter from './routes/gdpr'
 import healthRouter, { setReady } from './routes/health'
+import midnightRouter from './routes/midnight'
 import { initCrypto } from './lib/crypto'
 import { initDatabase, saveDatabase, closeDatabase, getDatabaseStats } from './lib/database'
 import { initializeMidnight } from './lib/midnight'
@@ -131,6 +132,7 @@ function startServer() {
   app.use('/api/org', orgRouter)           // Organization management
   app.use('/api/policies', policiesRouter) // Policy management
   app.use('/api/gdpr', gdprRouter)         // GDPR compliance endpoints
+  app.use('/api/midnight', midnightRouter) // Midnight Compact proof routes
   app.use('/health', healthRouter)         // Production health checks (K8s probes)
   
   // Prometheus metrics endpoint at root level for scraping
