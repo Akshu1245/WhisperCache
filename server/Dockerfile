@@ -18,7 +18,7 @@ COPY package*.json ./
 COPY tsconfig.json ./
 
 # Install all dependencies (including dev)
-RUN npm ci
+RUN npm install
 
 # Copy source code
 COPY src ./src
@@ -38,7 +38,7 @@ RUN apk add --no-cache python3 make g++ git
 
 # Copy ZK package files
 COPY zk/package*.json ./
-RUN npm ci
+RUN npm install
 
 # Copy circuit source
 COPY zk/circuits ./circuits
@@ -65,7 +65,7 @@ RUN addgroup -g 1001 -S nodejs && \
 COPY package*.json ./
 
 # Install production dependencies only
-RUN npm ci --only=production && npm cache clean --force
+RUN npm install --only=production && npm cache clean --force
 
 # Copy built application from builder
 COPY --from=builder /app/dist ./dist
@@ -107,7 +107,7 @@ COPY package*.json ./
 COPY tsconfig.json ./
 
 # Install all dependencies
-RUN npm ci
+RUN npm install
 
 # Copy source (will be overridden by volume mount)
 COPY src ./src

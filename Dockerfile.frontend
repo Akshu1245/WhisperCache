@@ -15,7 +15,7 @@ WORKDIR /app
 COPY client/package*.json ./
 
 # Install dependencies
-RUN npm ci
+RUN npm install
 
 # ============================================================================
 # Stage 2: Builder
@@ -102,7 +102,7 @@ WORKDIR /app
 COPY client/package*.json ./
 
 # Install dependencies
-RUN npm ci
+RUN npm install
 
 # Set environment
 ENV NODE_ENV=development

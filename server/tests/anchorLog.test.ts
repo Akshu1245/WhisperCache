@@ -31,9 +31,10 @@ describe('Anchor Log Database Operations', () => {
     anchorType: 'sqlite' as const,
     simulatedBlock: 12345,
     simulatedTx: 'anchor_tx_' + Math.random().toString(36).substring(7),
-    ipfsCid: null,
+    ipfsCid: undefined,
     commitment: 'commitment_test',
-    metadata: JSON.stringify({ test: true })
+    metadata: { test: true },
+    createdAt: new Date().toISOString()
   };
 
   const testAnchorLogIpfs = {
@@ -45,7 +46,8 @@ describe('Anchor Log Database Operations', () => {
     simulatedTx: 'anchor_tx_ipfs_' + Math.random().toString(36).substring(7),
     ipfsCid: 'bafybeig' + Math.random().toString(36).substring(7) + 'testcid',
     commitment: 'commitment_ipfs_test',
-    metadata: JSON.stringify({ ipfs: true })
+    metadata: { ipfs: true },
+    createdAt: new Date().toISOString()
   };
 
   describe('insertAnchorLog', () => {

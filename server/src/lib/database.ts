@@ -1020,25 +1020,30 @@ export interface BlockchainAnchorLog {
 /**
  * Insert a new anchor log entry
  */
-export function insertAnchorLog(log: BlockchainAnchorLog): void {
-  const db = getDatabase();
-  db.run(
-    `INSERT INTO blockchain_anchor_log 
-     (id, proof_hash, memory_hash, anchor_type, simulated_block, simulated_tx, ipfs_cid, commitment, metadata, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      log.id,
-      log.proofHash,
-      log.memoryHash || null,
-      log.anchorType,
-      log.simulatedBlock || null,
-      log.simulatedTx || null,
-      log.ipfsCid || null,
-      log.commitment || null,
-      log.metadata ? JSON.stringify(log.metadata) : null,
-      log.createdAt
-    ]
-  );
+export function insertAnchorLog(log: BlockchainAnchorLog): boolean {
+  try {
+    const db = getDatabase();
+    db.run(
+      `INSERT INTO blockchain_anchor_log 
+       (id, proof_hash, memory_hash, anchor_type, simulated_block, simulated_tx, ipfs_cid, commitment, metadata, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        log.id,
+        log.proofHash,
+        log.memoryHash || null,
+        log.anchorType,
+        log.simulatedBlock || null,
+        log.simulatedTx || null,
+        log.ipfsCid || null,
+        log.commitment || null,
+        typeof log.metadata === 'string' ? log.metadata : (log.metadata ? JSON.stringify(log.metadata) : null),
+        log.createdAt || new Date().toISOString()
+      ]
+    );
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -1098,12 +1103,20 @@ export function getAnchorLogByIpfsCid(ipfsCid: string): BlockchainAnchorLog | nu
 /**
  * Get recent anchor logs
  */
-export function getRecentAnchorLogs(limit: number = 10): BlockchainAnchorLog[] {
+export function getRecentAnchorLogs(limit: number = 10, anchorType?: AnchorType): BlockchainAnchorLog[] {
   const db = getDatabase();
-  const result = db.exec(
-    'SELECT * FROM blockchain_anchor_log ORDER BY created_at DESC LIMIT ?',
-    [limit]
-  );
+  let query = 'SELECT * FROM blockchain_anchor_log';
+  const params: any[] = [];
+  
+  if (anchorType) {
+    query += ' WHERE anchor_type = ?';
+    params.push(anchorType);
+  }
+  
+  query += ' ORDER BY created_at DESC LIMIT ?';
+  params.push(limit);
+  
+  const result = db.exec(query, params);
   
   if (!result.length) return [];
   
@@ -1124,7 +1137,7 @@ export function getRecentAnchorLogs(limit: number = 10): BlockchainAnchorLog[] {
 /**
  * Get anchor statistics
  */
-export function getAnchorLogStats(): { total: number; byType: Record<string, number> } {
+export function getAnchorLogStats(): { total: number; byType: Array<{ anchorType: string; count: number }> } {
   const db = getDatabase();
   const totalResult = db.exec('SELECT COUNT(*) FROM blockchain_anchor_log');
   const total = (totalResult[0]?.values[0]?.[0] as number) || 0;
@@ -1133,10 +1146,10 @@ export function getAnchorLogStats(): { total: number; byType: Record<string, num
     'SELECT anchor_type, COUNT(*) FROM blockchain_anchor_log GROUP BY anchor_type'
   );
   
-  const byType: Record<string, number> = {};
+  const byType: Array<{ anchorType: string; count: number }> = [];
   if (byTypeResult.length && byTypeResult[0].values) {
     for (const row of byTypeResult[0].values) {
-      byType[row[0] as string] = row[1] as number;
+      byType.push({ anchorType: row[0] as string, count: row[1] as number });
     }
   }
   

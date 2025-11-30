@@ -164,8 +164,7 @@ describe('Blockchain Anchor API - IPFS Mode', () => {
     // Set IPFS mode
     process.env.ANCHOR_MODE = 'ipfs';
     
-    // Need to re-import to pick up new env
-    jest.resetModules?.();
+    // Import blockchainAnchorRouter
     const { default: blockchainAnchorRouter } = await import('../src/routes/blockchainAnchor');
     
     ipfsApp = express();
