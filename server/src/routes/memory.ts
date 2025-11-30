@@ -24,6 +24,7 @@ function requireUserId(req: Request, res: Response): string | null {
   return userId;
 }
 
+// Validates that the commitment is a 64-character hex string (256-bit hash)
 function isValidCommitment(s: unknown): boolean {
   return typeof s === 'string' && /^[0-9a-fA-F]{64}$/.test(s);
 }
