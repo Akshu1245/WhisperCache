@@ -5,7 +5,6 @@
 ## 🚀 One-Liner
 **AI remembers you — without ever seeing you.**
 
----
 
 ## 🧠 The Problem
 Current AI assistants store raw user memories on cloud servers, risking exposure:
