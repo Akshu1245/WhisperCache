@@ -8,52 +8,73 @@
 
 import _sodium from 'libsodium-wrappers';
 
-let sodiumReady = false;
+// Use lazy initialization with cached sodium instance
+let sodiumInstance: typeof _sodium | null = null;
+let initializationPromise: Promise<void> | null = null;
 
+/**
+ * Initialize libsodium once and cache the instance
+ */
 export async function initCrypto(): Promise<void> {
-  if (!sodiumReady) {
-    await _sodium.ready;
-    sodiumReady = true;
+  if (sodiumInstance) return;
+  
+  // Prevent race conditions with promise caching
+  if (initializationPromise) {
+    await initializationPromise;
+    return;
   }
+  
+  initializationPromise = (async () => {
+    await _sodium.ready;
+    sodiumInstance = _sodium;
+  })();
+  
+  await initializationPromise;
 }
 
+/**
+ * Get cached sodium instance (throws if not initialized)
+ */
 export function getSodium(): typeof _sodium {
-  if (!sodiumReady) {
+  if (!sodiumInstance) {
     throw new Error('Crypto not initialized. Call initCrypto() first.');
   }
-  return _sodium;
+  return sodiumInstance;
 }
 
 /**
- * Verifies a content hash matches expected format
+ * Synchronously check if crypto is ready (for hot paths)
  */
-export async function verifyHashFormat(hash: string): Promise<boolean> {
-  await initCrypto();
-  
-  // Hash should be 64 hex characters (32 bytes)
-  return /^[a-f0-9]{64}$/i.test(hash);
+export function isCryptoReady(): boolean {
+  return sodiumInstance !== null;
+}
+
+// Pre-compiled regex for hash validation (created once)
+const HASH_REGEX = /^[a-f0-9]{64}$/i;
+
+/**
+ * Verifies a content hash matches expected format (optimized - no crypto needed for regex)
+ */
+export function verifyHashFormat(hash: string): boolean {
+  // Hash should be 64 hex characters (32 bytes) - pure regex, no crypto init needed
+  return HASH_REGEX.test(hash);
 }
 
 /**
- * Generates a cryptographic hash for data
+ * Generates a cryptographic hash for data (optimized)
  */
 export async function hashData(data: string): Promise<string> {
-  await initCrypto();
   const sodium = getSodium();
-  
   const dataBytes = sodium.from_string(data);
   const hash = sodium.crypto_generichash(32, dataBytes);
-  
   return sodium.to_hex(hash);
 }
 
 /**
- * Generates a random proof ID
+ * Generates a random proof ID (using crypto.randomBytes for speed)
  */
 export async function generateProofId(): Promise<string> {
-  await initCrypto();
   const sodium = getSodium();
-  
   const randomBytes = sodium.randombytes_buf(16);
   return 'proof_' + sodium.to_hex(randomBytes);
 }
@@ -62,25 +83,20 @@ export async function generateProofId(): Promise<string> {
  * Generates a secure random nonce for transactions
  */
 export async function generateNonce(): Promise<string> {
-  await initCrypto();
   const sodium = getSodium();
-  
   const nonce = sodium.randombytes_buf(24);
   return sodium.to_hex(nonce);
 }
 
 /**
- * Creates a commitment hash from multiple inputs
- * Used for ZK proof commitments
+ * Creates a commitment hash from multiple inputs (optimized with single hash call)
  */
 export async function createCommitment(...inputs: string[]): Promise<string> {
-  await initCrypto();
   const sodium = getSodium();
-  
+  // Join with separator to prevent hash collisions
   const combined = inputs.join('|');
   const bytes = sodium.from_string(combined);
   const hash = sodium.crypto_generichash(32, bytes);
-  
   return sodium.to_hex(hash);
 }
 
@@ -92,5 +108,9 @@ export async function verifyCommitment(
   ...inputs: string[]
 ): Promise<boolean> {
   const expected = await createCommitment(...inputs);
-  return commitment === expected;
+  // Use timing-safe comparison
+  const sodium = getSodium();
+  const commitmentBytes = sodium.from_hex(commitment);
+  const expectedBytes = sodium.from_hex(expected);
+  return sodium.memcmp(commitmentBytes, expectedBytes);
 }

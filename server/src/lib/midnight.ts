@@ -71,13 +71,11 @@ export interface ContractInfo {
   owner: string;
 }
 
+// Confirmation timeouts tracking for cleanup
+const confirmationTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
+
 /**
- * Midnight Network Client
- * 
- * Provides integration with the Midnight blockchain for:
- * - ZK proof anchoring
- * - Shielded data storage
- * - Transaction management
+ * Midnight Network Client (Optimized)
  */
 export class MidnightClient {
   private config: MidnightConfig;
@@ -114,8 +112,7 @@ export class MidnightClient {
     try {
       console.log(`[Midnight] Connecting to ${this.config.network}...`);
       
-      // In production, this would establish WebSocket connection to node
-      // For now, simulate connection
+      // Simulate connection
       await this.simulateNetworkLatency(100);
 
       this.connected = true;
@@ -139,10 +136,18 @@ export class MidnightClient {
   }
 
   /**
-   * Disconnect from Midnight network
+   * Disconnect from Midnight network and cleanup
    */
   async disconnect(): Promise<void> {
+    // Clear all pending confirmations
+    for (const timeout of confirmationTimeouts.values()) {
+      clearTimeout(timeout);
+    }
+    confirmationTimeouts.clear();
+    
     this.connected = false;
+    this.txStore.clear();
+    this.anchorStore.clear();
     console.log('[Midnight] Disconnected from network');
   }
 
@@ -167,9 +172,6 @@ export class MidnightClient {
 
   /**
    * Anchor a ZK proof to the Midnight blockchain
-   * 
-   * This creates an immutable on-chain record that a proof existed
-   * at a specific point in time, without revealing the proof contents.
    */
   async anchorProof(payload: AnchorPayload): Promise<MidnightTransaction> {
     this.ensureConnected();
@@ -181,7 +183,7 @@ export class MidnightClient {
       throw new Error('Invalid anchor payload: missing required fields');
     }
 
-    // Generate transaction hash
+    // Generate transaction hash with cryptographically secure random
     const txData = JSON.stringify({
       ...payload,
       nonce: crypto.randomBytes(8).toString('hex'),
@@ -210,7 +212,7 @@ export class MidnightClient {
     await this.simulateNetworkLatency(200);
     tx.status = 'submitted';
 
-    // Simulate confirmation (in production, would poll/subscribe for confirmations)
+    // Simulate confirmation with cleanup tracking
     this.simulateConfirmation(txHash);
 
     console.log(`[Midnight] Proof anchored: ${txHash}`);
@@ -267,9 +269,6 @@ export class MidnightClient {
 
   /**
    * Submit a shielded transaction
-   * 
-   * Shielded transactions use ZK proofs to hide transaction details
-   * while still proving validity.
    */
   async submitShieldedTransaction(data: ShieldedData): Promise<MidnightTransaction> {
     this.ensureConnected();
@@ -308,7 +307,7 @@ export class MidnightClient {
   }
 
   /**
-   * Query anchored proofs by memory hash
+   * Query anchored proofs by memory hash (optimized with early exit)
    */
   async queryAnchorsByMemory(memoryHash: string): Promise<Array<{
     txHash: string;
@@ -340,7 +339,7 @@ export class MidnightClient {
   }
 
   /**
-   * Get recent anchors
+   * Get recent anchors (optimized)
    */
   async getRecentAnchors(limit: number = 10): Promise<Array<{
     txHash: string;
@@ -349,24 +348,20 @@ export class MidnightClient {
   }>> {
     this.ensureConnected();
 
+    const entries = Array.from(this.anchorStore.entries()).slice(-limit);
+    
     const results: Array<{
       txHash: string;
       payload: AnchorPayload;
       transaction: MidnightTransaction;
-    }> = [];
-
-    const entries = Array.from(this.anchorStore.entries()).slice(-limit);
-    
-    for (const [txHash, payload] of entries) {
+    }> = entries.map(([txHash, payload]) => {
       const tx = this.txStore.get(txHash);
-      if (tx) {
-        results.push({
-          txHash,
-          payload,
-          transaction: { ...tx }
-        });
-      }
-    }
+      return {
+        txHash,
+        payload,
+        transaction: tx ? { ...tx } : null!
+      };
+    }).filter(r => r.transaction !== null);
 
     return results.reverse();
   }
@@ -382,9 +377,9 @@ export class MidnightClient {
     this.ensureConnected();
 
     const baseGas = 21000;
-    const dataGas = Math.ceil(payloadSize / 32) * 16; // 16 gas per 32 bytes
+    const dataGas = Math.ceil(payloadSize / 32) * 16;
     const estimatedGas = baseGas + dataGas;
-    const gasPrice = '0.00000001'; // 10 gwei equivalent
+    const gasPrice = '0.00000001';
 
     return {
       estimatedGas,
@@ -428,18 +423,20 @@ export class MidnightClient {
   }
 
   private generateBlockHeight(): number {
-    // Simulate block production (~1 block per second)
     const baseBlock = 1000000;
     const timeOffset = Math.floor(Date.now() / 1000) % 100000;
     return baseBlock + timeOffset;
   }
 
   private generateTxHash(data: string): string {
-    return 'midnight_' + crypto
+    // Use crypto.randomBytes for better randomness
+    const randomPart = crypto.randomBytes(16).toString('hex');
+    const hash = crypto
       .createHash('sha256')
-      .update(data + Date.now() + Math.random())
+      .update(data + Date.now() + randomPart)
       .digest('hex')
       .slice(0, 48);
+    return 'midnight_' + hash;
   }
 
   private generateBlockHash(height: number): string {
@@ -455,15 +452,21 @@ export class MidnightClient {
   }
 
   private simulateConfirmation(txHash: string): void {
-    // Simulate confirmation after ~2 seconds
-    setTimeout(() => {
+    // Clear any existing timeout for this tx
+    const existingTimeout = confirmationTimeouts.get(txHash);
+    if (existingTimeout) clearTimeout(existingTimeout);
+
+    const timeoutId = setTimeout(() => {
       const tx = this.txStore.get(txHash);
       if (tx && tx.status === 'submitted') {
         tx.status = 'confirmed';
         tx.confirmations = 1;
         console.log(`[Midnight] Transaction confirmed: ${txHash}`);
       }
+      confirmationTimeouts.delete(txHash);
     }, 2000);
+
+    confirmationTimeouts.set(txHash, timeoutId);
   }
 }
 
