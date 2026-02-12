@@ -355,9 +355,9 @@ whispercache/
 
 ## 🔗 Links
 
-- **Live Demo:** [Coming Soon]
-- **GitHub:** [This Repo]
-- **Video:** [Upload before submission]
+- **Live Demo:** https://youtu.be/oia9d-GI3xQ?si=fVffCiQqg2wXt96-
+- **GitHub:** https://github.com/HarshithaSatthish/FLOWTIVE-AGENTIC-SWAN
+- **Video:** https://youtu.be/oia9d-GI3xQ?si=fVffCiQqg2wXt96-
 
 ---
 
@@ -368,11 +368,6 @@ Built with ❤️ for India Blockchain Week 2025
 ---
 
 *Privacy is not optional — it's fundamental.*
-
----
-
-## 📞 Team
-Akshay – WhisperCache Developer
 
 ---
 
